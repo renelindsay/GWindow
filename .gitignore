@@ -1,0 +1,45 @@
+# Ignore build folder
+/build/
+/**/build/
+
+# Visual Studio
+*.vcxproj*
+*.sln
+*.user
+*.ipch
+*.pdb
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Test executables
+/tests/test_header/Test_header*
+/tests/test_lib/Test_lib*
+
+# Android Studio / Gradle
+.gradle/
+.idea/
+.cxx/
+local.properties
+*.iml
+
+# NDK / CMake intermediate
+.externalNativeBuild/
+obj/
+
+# Logs
+*.log
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Packaging
+*.apk
+*.ap_      # Precompiled resources
+*.aab      # Android App Bundle
+*.aar      # Android Archive (libraries)
