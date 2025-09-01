@@ -161,8 +161,8 @@ class Window_android : public WindowBase {
 
   public:
     void SetTitle(const char* title){};  // TODO : Set window title?
-    void SetWinPos (uint x, uint y){};
-    void SetWinSize(uint w, uint h){};
+    void SetPosition(uint x, uint y){};
+    void SetSize(uint w, uint h){};
 
   private:
     void Create(const char* title="", uint width=640, uint height=480) {

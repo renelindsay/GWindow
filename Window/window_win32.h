@@ -64,8 +64,8 @@ class Window_win32 : public WindowBase {
     void EnableDPIAware();
 public:
     void SetTitle(const char* title);
-    void SetWinPos (uint x, uint y);
-    void SetWinSize(uint w, uint h);
+    void SetPosition(uint x, uint y);
+    void SetSize(uint w, uint h);
 
 public:
     Window_win32(){Create();};
@@ -167,12 +167,12 @@ Window_win32::~Window_win32() { DestroyWindow(hWnd); }
 
 void Window_win32::SetTitle(const char* title) { SetWindowText(hWnd, title); }
 
-void Window_win32::SetWinPos(uint x, uint y) {
+void Window_win32::SetPosition(uint x, uint y) {
     SetWindowPos(hWnd, NULL, x, y, 0, 0, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOSIZE);
     if (x != shape.x || y != shape.y) eventFIFO.push(MoveEvent(x, y));  // Trigger window moved event
 }
 
-void Window_win32::SetWinSize(uint w, uint h) {
+void Window_win32::SetSize(uint w, uint h) {
     RECT wr = {0, 0, (LONG)w, (LONG)h};
     AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);  // Add border size to create desired client area size
     int total_width = wr.right - wr.left;

@@ -177,8 +177,8 @@ class Window_xcb : public WindowBase {
 
   public:
     void SetTitle(const char* title);
-    void SetWinPos (uint x, uint y);
-    void SetWinSize(uint w, uint h);
+    void SetPosition(uint x, uint y);
+    void SetSize(uint w, uint h);
     //void CreateSurface(VkInstance instance);
 
     Window_xcb() {Create();}
@@ -368,13 +368,13 @@ void Window_xcb::SetTitle(const char* title) {
     xcb_flush(xcb_connection);
 }
 
-void Window_xcb::SetWinPos(uint x, uint y) {
+void Window_xcb::SetPosition(uint x, uint y) {
     uint values[] = {x, y};
     xcb_configure_window(xcb_connection, xcb_window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, values);
     xcb_flush(xcb_connection);
 }
 
-void Window_xcb::SetWinSize(uint w, uint h) {
+void Window_xcb::SetSize(uint w, uint h) {
     uint values[] = {w, h};
     xcb_configure_window(xcb_connection, xcb_window, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
     xcb_flush(xcb_connection);

@@ -365,9 +365,9 @@ protected:
 
     //--State query functions--
     //shape_t GetShape (){return shape;}                                             // return window shape in pixels
-    void  GetWinPos  (int16_t& x, int16_t& y) { x = shape.x; y = shape.y; }                      // return window position
-    void  GetWinSize (int16_t& width, int16_t& height) { width = Width(); height = Height(); }   // return window size
-    void  GetWinSize (int32_t& width, int32_t& height) { width = Width(); height = Height(); }   // return window size
+    void  GetPosition(int16_t& x, int16_t& y) { x = shape.x; y = shape.y; }                  // return window position
+    void  GetSize(int16_t& width, int16_t& height) { width = Width(); height = Height(); }   // return window size
+    void  GetSize(int32_t& width, int32_t& height) { width = Width(); height = Height(); }   // return window size
     bool  GetKeyState(eKeycode key) { return keystate[key]; }                      // return true if key is pressed
     bool  GetBtnState(uint8_t  btn) { return (btn < 6) ? mouse.btn[btn] : 0; }     // return true if mouse btn is pressed
     void  GetMousePos(int16_t& x, int16_t& y) {x = mouse.pos.x; y = mouse.pos.y;}  // return mouse x,y position
@@ -390,13 +390,13 @@ protected:
     //--Control functions--
     virtual void ShowKeyboard(bool enabled) {}                    // Shows the Android soft-keyboard.
     virtual void SetTitle(const char* title) {}
-    virtual void SetWinPos (uint x, uint y) {}
-    virtual void SetWinSize(uint w, uint h) {}
+    virtual void SetPosition(uint x, uint y) {}
+    virtual void SetSize(uint w, uint h) {}
     virtual const void* GetNativeHandle() const = 0;              // For creating Vulkan/OpenGL Surface
     virtual void ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {}
     virtual void SetCursor(eCursor id) {}
     virtual void SetFullscreen(bool enable) {}
-    void SetWinSizeScaled(uint w, uint h) {float s=GetScale(); SetWinSize(w*s, h*s);}
+    void SetSizeScaled(uint w, uint h) {float s=GetScale(); SetSize(w*s, h*s);}
 
     //--Event loop--
     virtual EventType GetEvent(bool wait_for_event = false) = 0;  // Fetch one event from the queue.
@@ -1144,8 +1144,8 @@ class Window_win32 : public WindowBase {
     void EnableDPIAware();
 public:
     void SetTitle(const char* title);
-    void SetWinPos (uint x, uint y);
-    void SetWinSize(uint w, uint h);
+    void SetPosition(uint x, uint y);
+    void SetSize(uint w, uint h);
 
 public:
     Window_win32(){Create();};
@@ -1247,12 +1247,12 @@ Window_win32::~Window_win32() { DestroyWindow(hWnd); }
 
 void Window_win32::SetTitle(const char* title) { SetWindowText(hWnd, title); }
 
-void Window_win32::SetWinPos(uint x, uint y) {
+void Window_win32::SetPosition(uint x, uint y) {
     SetWindowPos(hWnd, NULL, x, y, 0, 0, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOSIZE);
     if (x != shape.x || y != shape.y) eventFIFO.push(MoveEvent(x, y));  // Trigger window moved event
 }
 
-void Window_win32::SetWinSize(uint w, uint h) {
+void Window_win32::SetSize(uint w, uint h) {
     RECT wr = {0, 0, (LONG)w, (LONG)h};
     AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);  // Add border size to create desired client area size
     int total_width = wr.right - wr.left;
@@ -1805,8 +1805,8 @@ class Window_xcb : public WindowBase {
 
   public:
     void SetTitle(const char* title);
-    void SetWinPos (uint x, uint y);
-    void SetWinSize(uint w, uint h);
+    void SetPosition(uint x, uint y);
+    void SetSize(uint w, uint h);
     //void CreateSurface(VkInstance instance);
 
     Window_xcb() {Create();}
@@ -1996,13 +1996,13 @@ void Window_xcb::SetTitle(const char* title) {
     xcb_flush(xcb_connection);
 }
 
-void Window_xcb::SetWinPos(uint x, uint y) {
+void Window_xcb::SetPosition(uint x, uint y) {
     uint values[] = {x, y};
     xcb_configure_window(xcb_connection, xcb_window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, values);
     xcb_flush(xcb_connection);
 }
 
-void Window_xcb::SetWinSize(uint w, uint h) {
+void Window_xcb::SetSize(uint w, uint h) {
     uint values[] = {w, h};
     xcb_configure_window(xcb_connection, xcb_window, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
     xcb_flush(xcb_connection);
@@ -3449,8 +3449,8 @@ class Window_android : public WindowBase {
 
   public:
     void SetTitle(const char* title){};  // TODO : Set window title?
-    void SetWinPos (uint x, uint y){};
-    void SetWinSize(uint w, uint h){};
+    void SetPosition(uint x, uint y){};
+    void SetSize(uint w, uint h){};
 
   private:
     void Create(const char* title="", uint width=640, uint height=480) {
