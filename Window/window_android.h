@@ -51,7 +51,7 @@ const unsigned char ANDROID_TO_HID[256] = {
 //==========================Android=============================
 
 //------------------------ JNI Wrappers ------------------------
-static void ShowKeyboard(bool visible, int flags=0) {
+static void showKeyboard(bool visible, int flags=0) {
     JInputMethodManager InputMethod;
     JWindow window;
     JView decorView = window.getDecorView();
@@ -160,9 +160,9 @@ class Window_android : public WindowBase {
     //-----------------
 
   public:
-    void SetTitle(const char* title){};  // TODO : Set window title?
-    void SetPosition(uint x, uint y){};
-    void SetSize(uint w, uint h){};
+    void setTitle(const char* title){};  // TODO : Set window title?
+    void setPosition(uint x, uint y){};
+    void setSize(uint w, uint h){};
 
   private:
     void Create(const char* title="", uint width=640, uint height=480) {
@@ -184,7 +184,7 @@ class Window_android : public WindowBase {
                 if (cmd == APP_CMD_INIT_WINDOW) {
                     shape.width  = (uint16_t)ANativeWindow_getWidth (app->window);
                     shape.height = (uint16_t)ANativeWindow_getHeight(app->window);
-                    eventFIFO.push(ResizeEvent(shape.width, shape.height));        // post window-resize event
+                    eventFIFO.push(resizeEvent(shape.width, shape.height));        // post window-resize event
 /*
                     //Get device configuration for dp scaling
                     AConfiguration* config = AConfiguration_new();
@@ -194,7 +194,7 @@ class Window_android : public WindowBase {
                     AConfiguration_delete(config);
 */
                 }
-                if (cmd == APP_CMD_GAINED_FOCUS) eventFIFO.push(FocusEvent(true)); // post focus-event
+                if (cmd == APP_CMD_GAINED_FOCUS) eventFIFO.push(focusEvent(true)); // post focus-event
                 android_app_post_exec_cmd(app, cmd);
             }
         }
@@ -224,7 +224,7 @@ class Window_android : public WindowBase {
                 auto& pad = gpads[i];
                 pad.deviceID = deviceID;
                 MapGamepad(i);
-                eventFIFO.push(GPadConnect(i, true));
+                eventFIFO.push(gpadConnect(i, true));
                 return i;
             }
         return -1;
@@ -328,7 +328,7 @@ class Window_android : public WindowBase {
             int32_t id = gpads[i].deviceID;
             if(id) if (std::find(list.begin(), list.end(), id) == list.end()) {
                 gpads[i] = GPadSlots{};  // clear gamepad slot
-                eventFIFO.push(GPadConnect(i,false));
+                eventFIFO.push(gpadConnect(i,false));
             }
         }
         // Check for new connects
@@ -353,8 +353,8 @@ class Window_android : public WindowBase {
             //printf("keycode:%d (0x%02x) %d\n",keycode,keycode, down);
             auto& pad = gpads[id];
             int8_t eBTN = pad.eBtn(keycode);                        // keycode to eBTN
-            if(eBTN>0) eventFIFO.push(GPadButton(id, eBTN, down));  // is button:  eBTN event
-            if(eBTN<0) eventFIFO.push(GPadAxis  (id,-eBTN, down));  // is trigger: aAXIS event
+            if(eBTN>0) eventFIFO.push(gpadButton(id, eBTN, down));  // is button:  eBTN event
+            if(eBTN<0) eventFIFO.push(gpadAxis  (id,-eBTN, down));  // is trigger: aAXIS event
         }
         return eventFIFO.pop();
     }
@@ -396,7 +396,7 @@ class Window_android : public WindowBase {
             calibrate(val, a);                                                 // adjust min/max
             val = flatzone(val, a);                                            // apply deadzone
             if(isFuzz(val, a)) return;                                         // skip if value has not changed
-            eventFIFO.push(GPadAxis(id, eAxis, val));                          // push event
+            eventFIFO.push(gpadAxis(id, eAxis, val));                          // push event
         };
 
         axisEvent(eAXIS_LX);  // left thumb
@@ -410,10 +410,10 @@ class Window_android : public WindowBase {
         //---HAT---
         Gamepad& pad = gamepad[id];
         auto Hat = [&](int val, int btnNeg, int btnPos) { // convert hat axis values to button events
-            if((val!=-1) && ( pad.buttons[btnNeg])) eventFIFO.push(GPadButton(id, btnNeg, 0));
-            if((val!= 1) && ( pad.buttons[btnPos])) eventFIFO.push(GPadButton(id, btnPos, 0));
-            if((val==-1) && (!pad.buttons[btnNeg])) eventFIFO.push(GPadButton(id, btnNeg, 1));
-            if((val== 1) && (!pad.buttons[btnPos])) eventFIFO.push(GPadButton(id, btnPos, 1));
+            if((val!=-1) && ( pad.buttons[btnNeg])) eventFIFO.push(gpadButton(id, btnNeg, 0));
+            if((val!= 1) && ( pad.buttons[btnPos])) eventFIFO.push(gpadButton(id, btnPos, 0));
+            if((val==-1) && (!pad.buttons[btnNeg])) eventFIFO.push(gpadButton(id, btnNeg, 1));
+            if((val== 1) && (!pad.buttons[btnPos])) eventFIFO.push(gpadButton(id, btnPos, 1));
         };
 
         auto hatVal = [&](int8_t eAxis) -> float {
@@ -453,17 +453,17 @@ class Window_android : public WindowBase {
                 if(unicode) {
                     std::string utf8text = UnicodeToUTF8(unicode);
                     memcpy(buf, utf8text.c_str(), 4);  // copy to static buf so it doesn't go out of scope
-                    eventFIFO.push(TextEvent(buf));    // text typed event  (store in FIFO for next run)
+                    eventFIFO.push(textEvent(buf));    // text typed event  (store in FIFO for next run)
                 }
-                return KeyEvent(eDOWN, hidcode);       // key pressed event (returned on this run)
+                return keyEvent(eDOWN, hidcode);       // key pressed event (returned on this run)
             }
             case AKEY_EVENT_ACTION_UP: {
-                return KeyEvent(eUP, hidcode); // key released event
+                return keyEvent(eUP, hidcode); // key released event
             }
             case AKEY_EVENT_ACTION_MULTIPLE: {
                 // TODO: Implement IME and auto-correct string input,
                 //  (When google fixes the getCharacters bug.)
-                //return TextEvent("IME/AutoCorrect not supported");
+                //return textEvent("IME/AutoCorrect not supported");
             }
         }
         return {};
@@ -501,7 +501,7 @@ class Window_android : public WindowBase {
         }
         //-------------------------Emulate mouse from touch events--------------------------
         // if(event.tag==EventType::TOUCH && event.touch.id==0){  //if one-finger touch
-        //     eventFIFO.push(MouseEvent(event.touch.action, event.touch.x, event.touch.y, 1));
+        //     eventFIFO.push(mouseEvent(event.touch.action, event.touch.x, event.touch.y, 1));
         // }
         //----------------------------------------------------------------------------------
 #endif // ENABLE_MULTITOUCH
@@ -521,7 +521,7 @@ class Window_android : public WindowBase {
 
         // Get button state (bitmask: 0x1 = left, 0x2 = right, 0x4 = middle)
         int32_t buttons = AMotionEvent_getButtonState(a_event);
-        uint8_t bestBtn = GetBtnState(1) ? 1 : GetBtnState(2) ? 2 : GetBtnState(3) ? 3 : 0;
+        uint8_t bestBtn = getBtnState(1) ? 1 : getBtnState(2) ? 2 : getBtnState(3) ? 3 : 0;
 
         uint8_t btn = 0;  // get button that changed
         if(mouse.btn[3] != (buttons & AMOTION_EVENT_BUTTON_SECONDARY)) btn = 3;
@@ -529,14 +529,14 @@ class Window_android : public WindowBase {
         if(mouse.btn[1] != (buttons & AMOTION_EVENT_BUTTON_PRIMARY)) btn = 1;
 
         switch (action) {
-            case AMOTION_EVENT_ACTION_BUTTON_PRESS   : event = MouseEvent(eDOWN, x, y, btn);     break;
-            case AMOTION_EVENT_ACTION_MOVE           : event = MouseEvent(eMOVE, x, y, bestBtn); break;
-            case AMOTION_EVENT_ACTION_HOVER_MOVE     : event = MouseEvent(eMOVE, x, y, 0  );     break;
-            case AMOTION_EVENT_ACTION_BUTTON_RELEASE : event = MouseEvent(eUP,   x, y, btn);     break;
+            case AMOTION_EVENT_ACTION_BUTTON_PRESS   : event = mouseEvent(eDOWN, x, y, btn);     break;
+            case AMOTION_EVENT_ACTION_MOVE           : event = mouseEvent(eMOVE, x, y, bestBtn); break;
+            case AMOTION_EVENT_ACTION_HOVER_MOVE     : event = mouseEvent(eMOVE, x, y, 0  );     break;
+            case AMOTION_EVENT_ACTION_BUTTON_RELEASE : event = mouseEvent(eUP,   x, y, btn);     break;
             case AMOTION_EVENT_ACTION_SCROLL: {
                 float vscroll = AMotionEvent_getAxisValue(a_event, AMOTION_EVENT_AXIS_VSCROLL, 0);
                 uint8_t wheel = (vscroll > 0) ? 4 : 5;
-                event = MouseEvent(eDOWN, x, y, wheel);
+                event = mouseEvent(eDOWN, x, y, wheel);
                 break;
             }
             default: break;
@@ -545,7 +545,7 @@ class Window_android : public WindowBase {
     }
     //--------------------------------------------------
     //--------------- Main event handler ---------------
-    EventType GetEvent(bool wait_for_event = false) {
+    EventType getEvent(bool wait_for_event = false) {
         EventType event = {};
         if (!eventFIFO.isEmpty()) return eventFIFO.pop();  // pop message from message queue buffer
 
@@ -563,8 +563,8 @@ class Window_android : public WindowBase {
             android_app_pre_exec_cmd(app, cmd);
             if (app->onAppCmd != nullptr) app->onAppCmd(app, cmd);
             switch (cmd) {
-                case APP_CMD_GAINED_FOCUS: event = FocusEvent(true);  break;
-                case APP_CMD_LOST_FOCUS  : event = FocusEvent(false); break;
+                case APP_CMD_GAINED_FOCUS: event = focusEvent(true);  break;
+                case APP_CMD_LOST_FOCUS  : event = focusEvent(false); break;
                 default: break;
             }
             android_app_post_exec_cmd(app, cmd);
@@ -607,20 +607,20 @@ class Window_android : public WindowBase {
         }  // else if (id == LOOPER_ID_USER) { printf("LOOPER_ID_USER\n");}
 
         MonitorGamepads();
-        if (app->destroyRequested) return CloseEvent();  // Check if we are exiting.
+        if (app->destroyRequested) return closeEvent();  // Check if we are exiting.
         return {};
     };
     //--------------------------------------------------
 
     //--Show / Hide keyboard--
-    void ShowKeyboard(bool enabled) {
-        ::ShowKeyboard(enabled);
+    void showKeyboard(bool enabled) {
+        ::showKeyboard(enabled);
         //LOGI("%s keyboard", enabled ? "Show" : "Hide");
     }
 
-    virtual const void* GetNativeHandle() const {return app->window;};
+    virtual const void* getNativeHandle() const {return app->window;};
 
-    float GetDisplayScale() {
+    float getDisplayScale() {
         //Get device configuration for dp scaling
         AConfiguration* config = AConfiguration_new();
         AConfiguration_fromAssetManager(config, app->activity->assetManager);
@@ -632,11 +632,11 @@ class Window_android : public WindowBase {
     }
 
 #ifdef ENABLE_SHOWIMAGE
-    virtual void ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {
+    virtual void showImage(uint32_t* buf, uint32_t width, uint32_t height) {
         auto& wnd = app->window;
         int w = ANativeWindow_getWidth(wnd);
         int h = ANativeWindow_getHeight(wnd);
-        //int s = GetScale();
+        //int s = getScale();
         int s = 1.0;
         //printf("w=%d h=%d  w2=%d h2=%d\n", w,h, width, height);
 
@@ -665,7 +665,7 @@ class Window_android : public WindowBase {
 #endif
 #ifdef ENABLE_CLIPBOARD
 #define EXIT_IF_NULL(var) if(!var) return nullptr;
-    const char* GetClipboardText() {
+    const char* getClipboardText() {
         JClipboardManager clipman;
         JClipData clip = clipman.getPrimaryClip();   EXIT_IF_NULL(clip.obj)
         JClipDataItem item = clip.getItemAt(0);      EXIT_IF_NULL(item.obj)
@@ -674,7 +674,7 @@ class Window_android : public WindowBase {
         return clipboard.c_str();
     }
 
-    void SetClipboardText(const char* str) {
+    void setClipboardText(const char* str) {
         JClipboardManager clipman;
         JString label("");
         JString text(str);

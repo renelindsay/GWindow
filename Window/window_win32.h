@@ -55,7 +55,7 @@ class Window_win32 : public WindowBase {
     RECT rect;            // Save window rect while in fullscreen mode
     DWORD style;          // Save window stype while in fullscreen mode
     CMTouch MTouch;       // Multi-Touch device
-    HBITMAP DIB = 0;      // For ShowImage().  Holds image to display.
+    HBITMAP DIB = 0;      // For showImage().  Holds image to display.
     HCURSOR cursors[12];  // For mouse cursors
 
     void Create(const char* title="Window", uint width=640, uint height=480);
@@ -63,29 +63,29 @@ class Window_win32 : public WindowBase {
     void ReadGamepadEvents();
     void EnableDPIAware();
 public:
-    void SetTitle(const char* title);
-    void SetPosition(uint x, uint y);
-    void SetSize(uint w, uint h);
+    void setTitle(const char* title);
+    void setPosition(uint x, uint y);
+    void setSize(uint w, uint h);
 
 public:
     Window_win32(){Create();};
     Window_win32(const char* title, uint width, uint height);
     virtual ~Window_win32();
-    EventType GetEvent(bool wait_for_event = false);
-    const void* GetNativeHandle() const {return &hInstance;};
-    float GetDisplayScale();
+    EventType getEvent(bool wait_for_event = false);
+    const void* getNativeHandle() const {return &hInstance;};
+    float getDisplayScale();
 #ifdef ENABLE_SHOWIMAGE
-    void ShowImage(uint32_t* buf, uint32_t width, uint32_t height);
+    void showImage(uint32_t* buf, uint32_t width, uint32_t height);
 #endif
 #ifdef ENABLE_CURSOR
-    void SetCursor(eCursor id);
+    void setCursor(eCursor id);
 #endif
 #ifdef ENABLE_CLIPBOARD
-    void SetClipboardText(const char* text) override;
-    const char* GetClipboardText() override;
+    void setClipboardText(const char* text) override;
+    const char* getClipboardText() override;
 #endif
 #ifdef ENABLE_FULLSCREEN
-    void SetFullscreen(bool enable);
+    void setFullscreen(bool enable);
 #endif
 
 };
@@ -160,31 +160,31 @@ void Window_win32::Create(const char* title, uint width, uint height) {
     cursors[10]= LoadCursor(NULL, IDC_NO);          // Not Allowed
 #endif
 
-    eventFIFO.push(ResizeEvent(width, height));
+    eventFIFO.push(resizeEvent(width, height));
 }
 
 Window_win32::~Window_win32() { DestroyWindow(hWnd); }
 
-void Window_win32::SetTitle(const char* title) { SetWindowText(hWnd, title); }
+void Window_win32::setTitle(const char* title) { SetWindowText(hWnd, title); }
 
-void Window_win32::SetPosition(uint x, uint y) {
+void Window_win32::setPosition(uint x, uint y) {
     SetWindowPos(hWnd, NULL, x, y, 0, 0, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOSIZE);
-    if (x != shape.x || y != shape.y) eventFIFO.push(MoveEvent(x, y));  // Trigger window moved event
+    if (x != shape.x || y != shape.y) eventFIFO.push(moveEvent(x, y));  // Trigger window moved event
 }
 
-void Window_win32::SetSize(uint w, uint h) {
+void Window_win32::setSize(uint w, uint h) {
     RECT wr = {0, 0, (LONG)w, (LONG)h};
     AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);  // Add border size to create desired client area size
     int total_width = wr.right - wr.left;
     int total_height = wr.bottom - wr.top;
     SetWindowPos(hWnd, NULL, 0, 0, total_width, total_height, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE);
-    if ((w != shape.width) | (h != shape.height)) eventFIFO.push(ResizeEvent(w, h));  // Trigger resize event
+    if ((w != shape.width) | (h != shape.height)) eventFIFO.push(resizeEvent(w, h));  // Trigger resize event
 }
 
 #define WM_RESHAPE (WM_USER + 0)
 #define WM_ACTIVE  (WM_USER + 1)
 
-EventType Window_win32::GetEvent(bool wait_for_event) {
+EventType Window_win32::getEvent(bool wait_for_event) {
     // EventType event;
     if (!eventFIFO.isEmpty()) return eventFIFO.pop();
 
@@ -201,8 +201,8 @@ EventType Window_win32::GetEvent(bool wait_for_event) {
         if (msg.message == WM_KEYDOWN || msg.message == WM_KEYUP) {
             if (msg.wParam == VK_CONTROL) msg.wParam = (msg.lParam & (1 << 24)) ? VK_RCONTROL : VK_LCONTROL;
             if (msg.wParam == VK_SHIFT) {
-                if (!!(::GetKeyState(VK_LSHIFT) & 128) != GetKeyState(eKEY_LeftShift )) PostMessage(hWnd, msg.message, VK_LSHIFT, 0);
-                if (!!(::GetKeyState(VK_RSHIFT) & 128) != GetKeyState(eKEY_RightShift)) PostMessage(hWnd, msg.message, VK_RSHIFT, 0);
+                if (!!(::GetKeyState(VK_LSHIFT) & 128) != getKeyState(eKEY_LeftShift )) PostMessage(hWnd, msg.message, VK_LSHIFT, 0);
+                if (!!(::GetKeyState(VK_RSHIFT) & 128) != getKeyState(eKEY_RightShift)) PostMessage(hWnd, msg.message, VK_RSHIFT, 0);
                 return {EventType::NONE};
             }
         } else if (msg.message == WM_SYSKEYDOWN || msg.message == WM_SYSKEYUP) {
@@ -211,16 +211,16 @@ EventType Window_win32::GetEvent(bool wait_for_event) {
         //-----------------------------------------------------------------------------------------------------------------
 
         static char buf[4] = {};
-        uint8_t bestBtn = GetBtnState(1) ? 1 : GetBtnState(2) ? 2 : GetBtnState(3) ? 3 : 0;
+        uint8_t bestBtn = getBtnState(1) ? 1 : getBtnState(2) ? 2 : getBtnState(3) ? 3 : 0;
         switch (msg.message) {
             //--Mouse events--
-            case WM_MOUSEMOVE  : return MouseEvent(eMOVE, x, y, bestBtn);
-            case WM_LBUTTONDOWN: return MouseEvent(eDOWN, x, y, 1);
-            case WM_MBUTTONDOWN: return MouseEvent(eDOWN, x, y, 2);
-            case WM_RBUTTONDOWN: return MouseEvent(eDOWN, x, y, 3);
-            case WM_LBUTTONUP  : return MouseEvent(eUP  , x, y, 1);
-            case WM_MBUTTONUP  : return MouseEvent(eUP  , x, y, 2);
-            case WM_RBUTTONUP  : return MouseEvent(eUP  , x, y, 3);
+            case WM_MOUSEMOVE  : return mouseEvent(eMOVE, x, y, bestBtn);
+            case WM_LBUTTONDOWN: return mouseEvent(eDOWN, x, y, 1);
+            case WM_MBUTTONDOWN: return mouseEvent(eDOWN, x, y, 2);
+            case WM_RBUTTONDOWN: return mouseEvent(eDOWN, x, y, 3);
+            case WM_LBUTTONUP  : return mouseEvent(eUP  , x, y, 1);
+            case WM_MBUTTONUP  : return mouseEvent(eUP  , x, y, 2);
+            case WM_RBUTTONUP  : return mouseEvent(eUP  , x, y, 3);
             //--Mouse wheel events--
             case WM_MOUSEWHEEL: {
                 uint8_t wheel = (GET_WHEEL_DELTA_WPARAM(msg.wParam) > 0) ? 4 : 5;
@@ -229,40 +229,40 @@ EventType Window_win32::GetEvent(bool wait_for_event) {
                 return {EventType::MOUSE, {eDOWN, (int16_t)point.x, (int16_t)point.y, wheel}};
             }
             //--Keyboard events--
-            case WM_KEYDOWN   : return KeyEvent(eDOWN, WIN32_TO_HID[msg.wParam]);
-            case WM_KEYUP     : return KeyEvent(eUP  , WIN32_TO_HID[msg.wParam]);
+            case WM_KEYDOWN   : return keyEvent(eDOWN, WIN32_TO_HID[msg.wParam]);
+            case WM_KEYUP     : return keyEvent(eUP  , WIN32_TO_HID[msg.wParam]);
             case WM_SYSKEYDOWN: {MSG discard; GetMessage(&discard, NULL, 0, 0);     // Alt-key triggers a WM_MOUSEMOVE message... Discard it.
-                                return KeyEvent(eDOWN, WIN32_TO_HID[msg.wParam]); } // +alt key
-            case WM_SYSKEYUP  : return KeyEvent(eUP  , WIN32_TO_HID[msg.wParam]);   // +alt key
+                                return keyEvent(eDOWN, WIN32_TO_HID[msg.wParam]); } // +alt key
+            case WM_SYSKEYUP  : return keyEvent(eUP  , WIN32_TO_HID[msg.wParam]);   // +alt key
 
             //--Char event--
-            case WM_CHAR: { strncpy_s(buf, (const char*)&msg.wParam, 4);  return TextEvent(buf); }  // return UTF8 code of key pressed
+            case WM_CHAR: { strncpy_s(buf, (const char*)&msg.wParam, 4);  return textEvent(buf); }  // return UTF8 code of key pressed
             //--Window events--
-            case WM_ACTIVE: { return FocusEvent(msg.wParam != WA_INACTIVE); }
+            case WM_ACTIVE: { return focusEvent(msg.wParam != WA_INACTIVE); }
 
             case WM_RESHAPE: {
                 if (!has_focus) {
                     PostMessage(hWnd, WM_RESHAPE, msg.wParam, msg.lParam);  // Repost this event to the queue
-                    return FocusEvent(true);                                // Activate window before reshape
+                    return focusEvent(true);                                // Activate window before reshape
                 }
 
                 RECT r;
                 GetClientRect(hWnd, &r);
                 uint16_t w = (uint16_t)(r.right - r.left);
                 uint16_t h = (uint16_t)(r.bottom - r.top);
-                if (w != shape.width || h != shape.height) return ResizeEvent(w, h);  // window resized
+                if (w != shape.width || h != shape.height) return resizeEvent(w, h);  // window resized
 
                 GetWindowRect(hWnd, &r);
                 int16_t x = (int16_t)r.left;
                 int16_t y = (int16_t)r.top;
-                if (x != shape.x || y != shape.y) return MoveEvent(x, y);  // window moved
+                if (x != shape.x || y != shape.y) return moveEvent(x, y);  // window moved
                 break;
             }
             case WM_CLOSE: {
                 if(msg.hwnd == hWnd) {
                     //printf("WM_CLOSE\n");
                     if(DIB) {DeleteObject(DIB); DIB=0;}
-                    return CloseEvent();
+                    return closeEvent();
                 }
                 break;
             }
@@ -274,7 +274,7 @@ EventType Window_win32::GetEvent(bool wait_for_event) {
                     HBITMAP hOldBitmap = (HBITMAP)SelectObject(hMemDC, DIB);
                     int w = ps.rcPaint.right;
                     int h = ps.rcPaint.bottom;
-                    //float s = GetScale();
+                    //float s = getScale();
                     //StretchBlt(hDC, 0, 0, w*s, h*s, hMemDC, 0, 0, w, h, SRCCOPY);
                     BitBlt(hDC, 0, 0, w, h, hMemDC, 0, 0, SRCCOPY);
                     SelectObject(hMemDC, hOldBitmap);
@@ -319,7 +319,7 @@ static bool inClientArea = false;
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         case WM_CLOSE:
-            PostMessage(hWnd, WM_CLOSE, 0, 0);  // for OnCloseEvent
+            PostMessage(hWnd, WM_CLOSE, 0, 0);  // for onCloseEvent
             return 0;
         case WM_DESTROY:
             //LOGI("WM_DESTROY\n");
@@ -361,13 +361,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
-float Window_win32::GetDisplayScale() {
+float Window_win32::getDisplayScale() {
     int dpi = GetDpiForWindow(hWnd);
     //printf("dpi = %d\n", dpi);
     return dpi/96.f;
 }
 #ifdef ENABLE_SHOWIMAGE
-void Window_win32::ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {  // using GDI only
+void Window_win32::showImage(uint32_t* buf, uint32_t width, uint32_t height) {  // using GDI only
     if(DIB) {DeleteObject(DIB); DIB=0;}  // delete previous bitmap
     BITMAPINFO bmi{};
     bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -385,7 +385,7 @@ void Window_win32::ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {  
 #endif
 
 #ifdef ENABLE_CURSOR
-void Window_win32::SetCursor(eCursor id) {      // Override mouse cursor,
+void Window_win32::setCursor(eCursor id) {      // Override mouse cursor,
     if(inClientArea) ::SetCursor(cursors[id]);  // but not on window edges
 }
 #endif
@@ -402,7 +402,7 @@ void Window_win32::DetectGamepads() {
         XINPUT_STATE state;
         Gamepad& pad = gamepad[i];
         bool active = (XInputGetState(i, &state) == ERROR_SUCCESS);
-        if(active != pad.active) eventFIFO.push(GPadConnect(i, active));
+        if(active != pad.active) eventFIFO.push(gpadConnect(i, active));
     }
 }
 
@@ -416,7 +416,7 @@ void Window_win32::ReadGamepadEvents() {
 
         auto btnCheck = [&](eGamepadBtn btn, bool isDown) {
             if(pad.buttons[btn] == isDown) return;
-            eventFIFO.push(GPadButton(i, btn, isDown));
+            eventFIFO.push(gpadButton(i, btn, isDown));
         };
 
         WORD buttons = state.Gamepad.wButtons;
@@ -438,7 +438,7 @@ void Window_win32::ReadGamepadEvents() {
 
         auto axisCheck = [&](eGamepadAxis axis, float val) {
             if(pad.axes[axis] == val) return;
-            eventFIFO.push(GPadAxis(i, axis, val));
+            eventFIFO.push(gpadAxis(i, axis, val));
         };
 
         axisCheck(eAXIS_LX, state.Gamepad.sThumbLX / 32767.f);
@@ -457,7 +457,7 @@ void Window_win32::ReadGamepadEvents() {
 
 //---- Clipboard ----
 #ifdef ENABLE_CLIPBOARD
-    void Window_win32::SetClipboardText(const char* text) {
+    void Window_win32::setClipboardText(const char* text) {
         if (!OpenClipboard(nullptr)) return;
         EmptyClipboard();
 
@@ -471,7 +471,7 @@ void Window_win32::ReadGamepadEvents() {
         CloseClipboard();
     }
 
-    const char* Window_win32::GetClipboardText() {
+    const char* Window_win32::getClipboardText() {
         if (!OpenClipboard(nullptr)) return nullptr;
 
         HANDLE hData = GetClipboardData(CF_TEXT);
@@ -490,7 +490,7 @@ void Window_win32::ReadGamepadEvents() {
 //-------------------
 
 #ifdef ENABLE_FULLSCREEN
-    void Window_win32::SetFullscreen(bool enable) {
+    void Window_win32::setFullscreen(bool enable) {
         if(enable==fullscreen) return;
         fullscreen = enable;
 
@@ -506,7 +506,7 @@ void Window_win32::ReadGamepadEvents() {
             HMONITOR hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
             MONITORINFO mi = { sizeof(mi) };
             if (GetMonitorInfo(hMonitor, &mi)) {
-                float scale = GetDisplayScale();
+                float scale = getDisplayScale();
                 int x = int(mi.rcMonitor.left / scale);
                 int y = int(mi.rcMonitor.top / scale);
                 int w = int((mi.rcMonitor.right - mi.rcMonitor.left) / scale);

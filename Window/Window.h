@@ -5,10 +5,10 @@
 *  It provides functions for querying the current state of the window, keyboard,
 *  and mouse. Also, events may be processed via either polling or callbacks.
 *
-*  For polling, use the "GetEvent" function to return one event at a time,
-*  and process, using a case statement.  For an example, see the "ProcessEvents" implementation.
+*  For polling, use the "getEvent" function to return one event at a time,
+*  and process, using a case statement.  For an example, see the "processEvents" implementation.
 *
-*  For callbacks, use the "ProcessEvents" function to dispatch all queued events to their
+*  For callbacks, use the "processEvents" function to dispatch all queued events to their
 *  appropriate event handlers.  To create event handlers, derive your class from Window,
 *  and override the virtual event handler functions. (See WindowBase.h)
 *

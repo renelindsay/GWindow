@@ -1,7 +1,7 @@
 /*
 *--------------------------------------------------------------------------
 * FIFO Buffer is used in the few cases where event messages need to be buffered or swapped.
-* EventType contains a union struct of all possible message types that may be returned by GetEvent.
+* EventType contains a union struct of all possible message types that may be returned by getEvent.
 * WindowBase is the abstract base class for all the platform-specific window classes.
 *--------------------------------------------------------------------------
 */
@@ -110,85 +110,85 @@ protected:
     Gamepad gamepad[MAX_GAMEPADS];                                             // gamepad state
 
     EventFIFO eventFIFO;                                                       // Event message queue buffer
-    EventType MouseEvent (eAction action, int16_t x, int16_t y, uint8_t btn);  // Mouse event
-    EventType KeyEvent   (eAction action, uint8_t key);                        // Keyboard event
-    EventType TextEvent  (const char* str);                                    // Text event
-    EventType MoveEvent  (int16_t x, int16_t y);                               // Window moved
-    EventType ResizeEvent(uint16_t width, uint16_t height);                    // Window resized
-    EventType FocusEvent (bool has_focus);                                     // Window gained/lost focus   
-    EventType GPadConnect(uint8_t pad, bool active);                           // Gamepad connect/disconnect
-    EventType GPadButton (uint8_t pad, uint8_t btn, bool down);                // Gamepad button event
-    EventType GPadAxis   (uint8_t pad, uint8_t axis, float val);               // Gamepad axis events
-    EventType CloseEvent ();                                                   // Window closing
+    EventType mouseEvent (eAction action, int16_t x, int16_t y, uint8_t btn);  // Mouse event
+    EventType keyEvent   (eAction action, uint8_t key);                        // Keyboard event
+    EventType textEvent  (const char* str);                                    // Text event
+    EventType moveEvent  (int16_t x, int16_t y);                               // Window moved
+    EventType resizeEvent(uint16_t width, uint16_t height);                    // Window resized
+    EventType focusEvent (bool has_focus);                                     // Window gained/lost focus   
+    EventType gpadConnect(uint8_t pad, bool active);                           // Gamepad connect/disconnect
+    EventType gpadButton (uint8_t pad, uint8_t btn, bool down);                // Gamepad button event
+    EventType gpadAxis   (uint8_t pad, uint8_t axis, float val);               // Gamepad axis events
+    EventType closeEvent ();                                                   // Window closing
 
     float display_scale = 0.f;
     bool running;
     bool has_focus;                                                            // true if window has focus
-    bool resized;                                                              // true if window has been resized
+    bool is_resized;                                                           // true if window has been resized
     bool fullscreen;                                                           // true if window is fullscreen
     struct shape_t { int16_t x; int16_t y; uint16_t width; uint16_t height; } shape = {};  // window shape
     std::string clipboard;
 
   public:
-    WindowBase() : running(false), has_focus(false), resized(false), fullscreen(false){}
+    WindowBase() : running(false), has_focus(false), is_resized(false), fullscreen(false){}
     virtual ~WindowBase() {}
-    virtual void Close() { eventFIFO.push(CloseEvent()); }
+    virtual void close() { eventFIFO.push(closeEvent()); }
 
     //--State query functions--
-    //shape_t GetShape (){return shape;}                                             // return window shape in pixels
-    void  GetPosition(int16_t& x, int16_t& y) { x = shape.x; y = shape.y; }                  // return window position
-    void  GetSize(int16_t& width, int16_t& height) { width = Width(); height = Height(); }   // return window size
-    void  GetSize(int32_t& width, int32_t& height) { width = Width(); height = Height(); }   // return window size
-    bool  GetKeyState(eKeycode key) { return keystate[key]; }                      // return true if key is pressed
-    bool  GetBtnState(uint8_t  btn) { return (btn < 6) ? mouse.btn[btn] : 0; }     // return true if mouse btn is pressed
-    void  GetMousePos(int16_t& x, int16_t& y) {x = mouse.pos.x; y = mouse.pos.y;}  // return mouse x,y position
-    Gamepad& GetGamepad(uint8_t pad) {return gamepad[pad];}                        // return the gamepad state
+    //shape_t GetShape (){return shape;}                                           // return window shape in pixels
+    void  getPosition(int16_t& x, int16_t& y) { x = shape.x; y = shape.y; }        // return window position
+    void  getSize(int16_t& w, int16_t& h) { w = width(); h = height(); }           // return window size
+    void  getSize(int32_t& w, int32_t& h) { w = width(); h = height(); }           // return window size
+    bool  getKeyState(eKeycode key) { return keystate[key]; }                      // return true if key is pressed
+    bool  getBtnState(uint8_t  btn) { return (btn < 6) ? mouse.btn[btn] : 0; }     // return true if mouse btn is pressed
+    void  getMousePos(int16_t& x, int16_t& y) {x = mouse.pos.x; y = mouse.pos.y;}  // return mouse x,y position
+    Gamepad& getGamepad(uint8_t pad) {return gamepad[pad];}                        // return the gamepad state
 
-    bool IsRunning() { return running; }
-    uint Width() {return shape.width; }
-    uint Height(){return shape.height;}
-    bool Resized() { bool resize = resized; resized = false; return resize; }
-    float GetScale() {return (display_scale>0)? display_scale : GetDisplayScale();}
-    void  SetScale(float val) {display_scale = val;}
+    bool isRunning() { return running; }
+    uint width() {return shape.width; }
+    uint height(){return shape.height;}
+    bool resized() { bool resize = is_resized; is_resized = false; return resize; }
+    float getScale() {return (display_scale>0)? display_scale : getDisplayScale();}
+    void  setScale(float val) {display_scale = val;}
 
-    virtual float GetDisplayScale() {return 1.f;}
-    virtual bool IsFullscreen() {return fullscreen;}
+    virtual float getDisplayScale() {return 1.f;}
+    virtual bool isFullscreen() {return fullscreen;}
 
     //--Clipboard--
-    virtual const char* GetClipboardText() {return clipboard.c_str(); }  // Fallback implementation works only locally.
-    virtual void SetClipboardText(const char* str) { clipboard = str; }  // Platform implementations overrides this.
+    virtual const char* getClipboardText() {return clipboard.c_str(); }  // Fallback implementation works only locally.
+    virtual void setClipboardText(const char* str) { clipboard = str; }  // Platform implementations overrides this.
 
     //--Control functions--
-    virtual void ShowKeyboard(bool enabled) {}                    // Shows the Android soft-keyboard.
-    virtual void SetTitle(const char* title) {}
-    virtual void SetPosition(uint x, uint y) {}
-    virtual void SetSize(uint w, uint h) {}
-    virtual const void* GetNativeHandle() const = 0;              // For creating Vulkan/OpenGL Surface
-    virtual void ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {}
-    virtual void SetCursor(eCursor id) {}
-    virtual void SetFullscreen(bool enable) {}
-    void SetSizeScaled(uint w, uint h) {float s=GetScale(); SetSize(w*s, h*s);}
+    virtual void showKeyboard(bool enabled) {}                    // Shows the Android soft-keyboard.
+    virtual void setTitle(const char* title) {}
+    virtual void setPosition(uint x, uint y) {}
+    virtual void setSize(uint w, uint h) {}
+    virtual const void* getNativeHandle() const = 0;              // For creating Vulkan/OpenGL Surface
+    virtual void showImage(uint32_t* buf, uint32_t width, uint32_t height) {}
+    virtual void setCursor(eCursor id) {}
+    virtual void setFullscreen(bool enable) {}
+    void setSizeScaled(uint w, uint h) {float s=getScale(); setSize(w*s, h*s);}
 
     //--Event loop--
-    virtual EventType GetEvent(bool wait_for_event = false) = 0;  // Fetch one event from the queue.
-    bool ProcessEvents(bool wait_for_event = false);              // Dispatch all waiting events to event handlers. Returns false if window is closing.
-    bool ProcessEvent (EventType e);                              // Dispatch/inject the given event to event handlers.
-    bool PollEvents() { return ProcessEvents(false); }            // Run continuously
-    bool WaitEvents() { return ProcessEvents(true ); }            // Pause app when there are no events to process
-    // void Run(){ while(ProcessEvents()){} }                     // Run message loop until window is closed.
+    virtual EventType getEvent(bool wait_for_event = false) = 0;  // Fetch one event from the queue.
+    bool processEvents(bool wait_for_event = false);              // Dispatch all waiting events to event handlers. Returns false if window is closing.
+    bool processEvent (EventType e);                              // Dispatch/inject the given event to event handlers.
+    bool pollEvents() { return processEvents(false); }            // Run continuously
+    bool waitEvents() { return processEvents(true ); }            // Pause app when there are no events to process
+    // void Run(){ while(processEvents()){} }                     // Run message loop until window is closed.
 
     //-- Virtual Functions as event handlers --
-    virtual void OnMouseEvent(eAction action, int16_t x, int16_t y, uint8_t btn) {}  // Callback for mouse events
-    virtual void OnKeyEvent(eAction action, eKeycode keycode) {}                     // Callback for keyboard events (keycodes)
-    virtual void OnTextEvent(const char *str) {}                                     // Callback for text typed events (text)
-    virtual void OnMoveEvent(int16_t x, int16_t y) {}                                // Callback for window move events
-    virtual void OnResizeEvent(uint16_t width, uint16_t height) {}                   // Callback for window resize events
-    virtual void OnFocusEvent(bool hasFocus) {}                                      // Callback for window gain/lose focus events
-    virtual void OnTouchEvent(eAction action, float x, float y, uint8_t id) {}       // Callback for Multi-touch events
-    virtual void OnGPadConnect(uint8_t pad, bool active){}                           // Callback for Joystick connect/disconnect
-    virtual void OnGPadButton(uint8_t pad, uint8_t btn, bool down){}                 // Callback for Joystick button events
-    virtual void OnGPadAxis(uint8_t pad, uint8_t axis, float val){}                  // Callback for Joystick axis events
-    virtual void OnCloseEvent() {}                                                   // Callback for window closing event
+    virtual void onMouseEvent(eAction action, int16_t x, int16_t y, uint8_t btn) {}  // Callback for mouse events
+    virtual void onKeyEvent(eAction action, eKeycode keycode) {}                     // Callback for keyboard events (keycodes)
+    virtual void onTextEvent(const char *str) {}                                     // Callback for text typed events (text)
+    virtual void onMoveEvent(int16_t x, int16_t y) {}                                // Callback for window move events
+    virtual void onResizeEvent(uint16_t width, uint16_t height) {}                   // Callback for window resize events
+    virtual void onFocusEvent(bool hasFocus) {}                                      // Callback for window gain/lose focus events
+    virtual void onTouchEvent(eAction action, float x, float y, uint8_t id) {}       // Callback for Multi-touch events
+    virtual void onGpadConnect(uint8_t pad, bool active){}                           // Callback for Joystick connect/disconnect
+    virtual void onGpadButton(uint8_t pad, uint8_t btn, bool down){}                 // Callback for Joystick button events
+    virtual void onGpadAxis(uint8_t pad, uint8_t axis, float val){}                  // Callback for Joystick axis events
+    virtual void onCloseEvent() {}                                                   // Callback for window closing event
 };
 //==============================================================
 

@@ -24,7 +24,7 @@
 #include <stdlib.h>               // atof
 #include <assert.h>
 #ifdef ENABLE_SHOWIMAGE
-#include <xcb/xcb_image.h>        // ShowImage  libxcb-image0-dev
+#include <xcb/xcb_image.h>        // showImage  libxcb-image0-dev
 #endif
 #ifdef ENABLE_CURSOR
 #include <xcb/xcb_cursor.h>       // mouse cursor icons
@@ -176,25 +176,25 @@ class Window_xcb : public WindowBase {
     xcb_atom_t GetAtom(const char* name, bool only_if_exists = false);
 
   public:
-    void SetTitle(const char* title);
-    void SetPosition(uint x, uint y);
-    void SetSize(uint w, uint h);
+    void setTitle(const char* title);
+    void setPosition(uint x, uint y);
+    void setSize(uint w, uint h);
     //void CreateSurface(VkInstance instance);
 
     Window_xcb() {Create();}
     Window_xcb(const char* title, uint width, uint height);
     virtual ~Window_xcb();
-    EventType GetEvent(bool wait_for_event = false);
+    EventType getEvent(bool wait_for_event = false);
     //bool CanPresent(VkPhysicalDevice phy, uint32_t queue_family);  // check if this window can present this queue type
-    const void* GetNativeHandle() const {return &xcb_connection;}
-    float GetDisplayScale();
+    const void* getNativeHandle() const {return &xcb_connection;}
+    float getDisplayScale();
 #ifdef ENABLE_SHOWIMAGE
-    void ShowImage(uint32_t* buf, uint32_t width, uint32_t height);
+    void showImage(uint32_t* buf, uint32_t width, uint32_t height);
 #endif
-    void SetCursor(eCursor id);
+    void setCursor(eCursor id);
 #ifdef ENABLE_FULLSCREEN
-    void SetFullscreen(bool enable);
-    bool IsFullscreen();
+    void setFullscreen(bool enable);
+    bool isFullscreen();
 #endif
 
 #ifdef ENABLE_CLIPBOARD
@@ -208,8 +208,8 @@ private:
     void InitClipboard();
     bool RequestClipboard();
 public:
-    virtual const char* GetClipboardText();
-    virtual void SetClipboardText(const char* str);
+    virtual const char* getClipboardText();
+    virtual void setClipboardText(const char* str);
 #else
     void InitClipboard(){};
 #endif
@@ -274,7 +274,7 @@ void Window_xcb::Create(const char* title, uint width, uint height) {
                     XCB_EVENT_MASK_POINTER_MOTION |     // 64       motion with no mouse button held
                     XCB_EVENT_MASK_BUTTON_MOTION  |     // 8192     motion with one or more mouse buttons held
                   //XCB_EVENT_MASK_KEYMAP_STATE |       // 16384
-                  //XCB_EVENT_MASK_EXPOSURE |           // 32768    Make ShowImage persistant
+                  //XCB_EVENT_MASK_EXPOSURE |           // 32768    Make showImage persistant
                   //XCB_EVENT_MASK_VISIBILITY_CHANGE,   // 65536,
                     XCB_EVENT_MASK_STRUCTURE_NOTIFY |   // 131072   Window move/resize events
                   //XCB_EVENT_MASK_RESIZE_REDIRECT |    // 262144
@@ -305,8 +305,8 @@ void Window_xcb::Create(const char* title, uint width, uint height) {
     InitClipboard();
     //--------------------
 
-    SetTitle(title);
-    eventFIFO.push(ResizeEvent(width, height));  // ResizeEvent BEFORE focus, for consistency with win32 and android
+    setTitle(title);
+    eventFIFO.push(resizeEvent(width, height));  // resizeEvent BEFORE focus, for consistency with win32 and android
 
     //---- Mouse Cursor ----
 #ifdef ENABLE_CURSOR
@@ -353,13 +353,13 @@ Window_xcb::~Window_xcb() {
 #ifdef ENABLE_GAMEPAD
     for (int i = 0; i < MAX_GAMEPADS; ++i) { DisconnectGamepad(i); }
     if (watch_fd   != -1) { inotify_rm_watch(inotify_fd, watch_fd); watch_fd=-1;}
-    if (inotify_fd != -1) { close(inotify_fd); inotify_fd=-1; }
+    if (inotify_fd != -1) { ::close(inotify_fd); inotify_fd=-1; }
 #endif
     xcb_disconnect(xcb_connection);
     XFree(k_ctx);  // xkb keyboard
 }
 
-void Window_xcb::SetTitle(const char* title) {
+void Window_xcb::setTitle(const char* title) {
     xcb_change_property(xcb_connection, XCB_PROP_MODE_REPLACE, xcb_window, XCB_ATOM_WM_NAME,  // set window title
                         XCB_ATOM_STRING, 8, strlen(title), title);
     xcb_change_property(xcb_connection, XCB_PROP_MODE_REPLACE, xcb_window, XCB_ATOM_WM_ICON_NAME,  // set icon title
@@ -368,13 +368,13 @@ void Window_xcb::SetTitle(const char* title) {
     xcb_flush(xcb_connection);
 }
 
-void Window_xcb::SetPosition(uint x, uint y) {
+void Window_xcb::setPosition(uint x, uint y) {
     uint values[] = {x, y};
     xcb_configure_window(xcb_connection, xcb_window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, values);
     xcb_flush(xcb_connection);
 }
 
-void Window_xcb::SetSize(uint w, uint h) {
+void Window_xcb::setSize(uint w, uint h) {
     uint values[] = {w, h};
     xcb_configure_window(xcb_connection, xcb_window, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
     xcb_flush(xcb_connection);
@@ -451,48 +451,48 @@ EventType Window_xcb::TranslateEvent(xcb_generic_event_t* x_event) {
     int16_t mx = e.event_x;
     int16_t my = e.event_y;
     uint8_t btn= e.detail;
-    uint8_t bestBtn = GetBtnState(1) ? 1 : GetBtnState(2) ? 2 : GetBtnState(3) ? 3 : 0;  // If multiple buttons pressed, pick left one.
+    uint8_t bestBtn = getBtnState(1) ? 1 : getBtnState(2) ? 2 : getBtnState(3) ? 3 : 0;  // If multiple buttons pressed, pick left one.
     switch(x_event->response_type & ~0x80) {
-        case XCB_MOTION_NOTIFY : return MouseEvent(eMOVE, mx, my, bestBtn); // mouse move
-        case XCB_BUTTON_PRESS  : return MouseEvent(eDOWN, mx, my, btn);     // mouse btn press
-        case XCB_BUTTON_RELEASE: return MouseEvent(eUP  , mx, my, btn);     // mouse btn release
+        case XCB_MOTION_NOTIFY : return mouseEvent(eMOVE, mx, my, bestBtn); // mouse move
+        case XCB_BUTTON_PRESS  : return mouseEvent(eDOWN, mx, my, btn);     // mouse btn press
+        case XCB_BUTTON_RELEASE: return mouseEvent(eUP  , mx, my, btn);     // mouse btn release
         case XCB_KEY_PRESS:{
             //printf("btn %d", btn);
             uint8_t keycode = EVDEV_TO_HID[btn];                    // On Stratus XL gamepad, 2 buttons trigger keyboard events
             if(!keycode) {                                          // remap key to gamepad btn
-                if(btn==166) return GPadButton(0, eBTN_SELECT, 1);  // Steelseries Stratus XL: select button (XF86Back)
-                if(btn==180) return GPadButton(0, eBTN_MODE, 1);    // Steelseries Stratus XL: mode button   (XF86HomePage)
+                if(btn==166) return gpadButton(0, eBTN_SELECT, 1);  // Steelseries Stratus XL: select button (XF86Back)
+                if(btn==180) return gpadButton(0, eBTN_MODE, 1);    // Steelseries Stratus XL: mode button   (XF86HomePage)
             }
             xkb_state_key_get_utf8(k_state,btn,buf,sizeof(buf));
             xkb_state_update_key(k_state,btn,XKB_KEY_DOWN);
-            if(buf[0]) eventFIFO.push(TextEvent(buf));              // text typed event (store in FIFO for next run)
-            return KeyEvent(eDOWN, keycode);                        // key pressed event
+            if(buf[0]) eventFIFO.push(textEvent(buf));              // text typed event (store in FIFO for next run)
+            return keyEvent(eDOWN, keycode);                        // key pressed event
         }
         case XCB_KEY_RELEASE: {
             xkb_state_update_key(k_state, btn, XKB_KEY_UP);
             uint8_t keycode = EVDEV_TO_HID[btn];
             if(!keycode) {                                          // remap key to gamepad btn
-                if(btn==166) return GPadButton(0, eBTN_SELECT, 0);  // Steelseries Stratus XL
-                if(btn==180) return GPadButton(0, eBTN_MODE, 0);    // Steelseries Stratus XL
+                if(btn==166) return gpadButton(0, eBTN_SELECT, 0);  // Steelseries Stratus XL
+                if(btn==180) return gpadButton(0, eBTN_MODE, 0);    // Steelseries Stratus XL
             }
-            return KeyEvent(eUP, keycode);                          // key released event
+            return keyEvent(eUP, keycode);                          // key released event
         }
         case XCB_CLIENT_MESSAGE: {                                  // window close event
             if ((*(xcb_client_message_event_t*)x_event).data.data32[0] == atom_wm_delete_window) {
                 //printf("Closing Window\n");
-                return CloseEvent();
+                return closeEvent();
             }
             break;
         }
         case XCB_CONFIGURE_NOTIFY: {                                // Window Reshape (move or resize)
             auto& e = *(xcb_configure_notify_event_t*)x_event;
             //bool se = (e.response_type & 128);                    // True if message was sent with "SendEvent"
-            if (e.width != shape.width || e.height != shape.height) return ResizeEvent(e.width, e.height); // window resized
-            else if (e.x != shape.x || e.y != shape.y)              return MoveEvent(e.x, e.y);            // window moved
+            if (e.width != shape.width || e.height != shape.height) return resizeEvent(e.width, e.height); // window resized
+            else if (e.x != shape.x || e.y != shape.y)              return moveEvent(e.x, e.y);            // window moved
             break;
         }
-        case XCB_FOCUS_IN  : if (!has_focus) return FocusEvent(true);   // window gained focus
-        case XCB_FOCUS_OUT : if ( has_focus) return FocusEvent(false);  // window lost focus
+        case XCB_FOCUS_IN  : if (!has_focus) return focusEvent(true);   // window gained focus
+        case XCB_FOCUS_OUT : if ( has_focus) return focusEvent(false);  // window lost focus
 
         case XCB_GE_GENERIC: {                                            // Multi touch screen events
 #ifdef ENABLE_MULTITOUCH
@@ -514,7 +514,7 @@ EventType Window_xcb::TranslateEvent(xcb_generic_event_t* x_event) {
         }  // XCB_GE_GENERIC
 
 #ifdef ENABLE_SHOWIMAGE
-        case XCB_EXPOSE: {  // for ShowImage
+        case XCB_EXPOSE: {  // for showImage
              xcb_expose_event_t& e = *(xcb_expose_event_t*)x_event;
              xcb_copy_area(xcb_connection,pixmap,xcb_window,gc,e.x,e.y,e.x,e.y,e.width,e.height);
              xcb_flush(xcb_connection);
@@ -591,7 +591,7 @@ EventType Window_xcb::TranslateEvent(xcb_generic_event_t* x_event) {
     return {EventType::NONE};
 }
 
-EventType Window_xcb::GetEvent(bool wait_for_event) {
+EventType Window_xcb::getEvent(bool wait_for_event) {
 #ifdef ENABLE_GAMEPAD
     ReadGamepadEvents();
 #endif
@@ -609,7 +609,7 @@ EventType Window_xcb::GetEvent(bool wait_for_event) {
     return {EventType::NONE};
 }
 
-float Window_xcb::GetDisplayScale() {
+float Window_xcb::getDisplayScale() {
     float dpi = 0.f;
     XrmValue value;
     char *type = NULL;
@@ -630,7 +630,7 @@ float Window_xcb::GetDisplayScale() {
 }
 
 #ifdef ENABLE_SHOWIMAGE
-void Window_xcb::ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {  // Shows image for 1 frame.
+void Window_xcb::showImage(uint32_t* buf, uint32_t width, uint32_t height) {  // Shows image for 1 frame.
     xcb_connection_t* c = xcb_connection;
     xcb_image_format_t format = XCB_IMAGE_FORMAT_Z_PIXMAP;
     int depth  = xcb_screen->root_depth;
@@ -650,14 +650,14 @@ void Window_xcb::ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {  //
 #endif
 
 
-void Window_xcb::SetCursor(eCursor id) {
+void Window_xcb::setCursor(eCursor id) {
 #ifdef ENABLE_CURSOR
     xcb_change_window_attributes(xcb_connection, xcb_window, XCB_CW_CURSOR, &cursors[id]);
 #endif
 }
 
 #ifdef ENABLE_FULLSCREEN
-void Window_xcb::SetFullscreen(bool enable) {
+void Window_xcb::setFullscreen(bool enable) {
     xcb_atom_t a_wm_state = GetAtom("_NET_WM_STATE");
     xcb_atom_t a_fullscreen = GetAtom("_NET_WM_STATE_FULLSCREEN");
 
@@ -681,7 +681,7 @@ void Window_xcb::SetFullscreen(bool enable) {
     xcb_flush(xcb_connection);
 }
 
-bool Window_xcb::IsFullscreen() {
+bool Window_xcb::isFullscreen() {
     xcb_atom_t net_wm_state = GetAtom("_NET_WM_STATE");
     xcb_atom_t fs_atom = GetAtom("_NET_WM_STATE_FULLSCREEN");
 
@@ -795,22 +795,22 @@ bool Window_xcb::ConnectGamepad(const char* path) {
                     //printf("Gamepad %d found: %s at %s\n", i, ev.name, path);
                     MapGamepad(i);           // Detect gamepad button layout
                     SetGamepadLEDs(i,1<<i);  // Set Gamepad LEDs to indicate which slot its in.
-                    eventFIFO.push(GPadConnect(i, true));
+                    eventFIFO.push(gpadConnect(i, true));
                     return true;
                 }
             }
-        } else {libevdev_free(dev); close(fd);}
-    } else close(fd);
+        } else {libevdev_free(dev); ::close(fd);}
+    } else ::close(fd);
     return false;
 }
 
 void Window_xcb::DisconnectGamepad(uint8_t id) {
     Evdev& ev = evdev[id];
     if(ev.fd==-1) return;
-    eventFIFO.push(GPadConnect(id, false));
+    eventFIFO.push(gpadConnect(id, false));
     //SetGamepadLEDs(id, 0);  // Does not restore blinking :(
     libevdev_free(ev.dev);
-    close(ev.fd);
+    ::close(ev.fd);
     memset(&ev, 0, sizeof(ev));
     ev.fd = -1;
     ev.dev = 0;
@@ -976,8 +976,8 @@ void Window_xcb::GamepadBtnEvent(uint8_t id, input_event event) {
     //printf("keycode=%d (0x%3x) %d\n", keycode, keycode, event.value);
     if(event.value>1) return;  // ignore repeats (0=up 1=down 2=repeat)
     for(auto& b : ev.b) if(keycode==b.BTN) {
-        if(b.eBTN>0) eventFIFO.push(GPadButton(id, b.eBTN, event.value));
-        if(b.eBTN<0) eventFIFO.push(GPadAxis  (id,-b.eBTN, event.value));
+        if(b.eBTN>0) eventFIFO.push(gpadButton(id, b.eBTN, event.value));
+        if(b.eBTN<0) eventFIFO.push(gpadAxis  (id,-b.eBTN, event.value));
     }
 }
 
@@ -992,10 +992,10 @@ void Window_xcb::GamepadAxisEvent(uint8_t id, input_event event) {
     };
 
     auto Hat = [&](int val, int btnNeg, int btnPos) { // convert hat axis values to button events
-        if((val!=-1) && ( pad.buttons[btnNeg])) eventFIFO.push(GPadButton(id, btnNeg, 0));
-        if((val!= 1) && ( pad.buttons[btnPos])) eventFIFO.push(GPadButton(id, btnPos, 0));
-        if((val==-1) && (!pad.buttons[btnNeg])) eventFIFO.push(GPadButton(id, btnNeg, 1));
-        if((val== 1) && (!pad.buttons[btnPos])) eventFIFO.push(GPadButton(id, btnPos, 1));
+        if((val!=-1) && ( pad.buttons[btnNeg])) eventFIFO.push(gpadButton(id, btnNeg, 0));
+        if((val!= 1) && ( pad.buttons[btnPos])) eventFIFO.push(gpadButton(id, btnPos, 0));
+        if((val==-1) && (!pad.buttons[btnNeg])) eventFIFO.push(gpadButton(id, btnNeg, 1));
+        if((val== 1) && (!pad.buttons[btnPos])) eventFIFO.push(gpadButton(id, btnPos, 1));
     };
 
     auto isFuzz = [](int value, auto& a) -> bool { // detect fuzz events
@@ -1035,7 +1035,7 @@ void Window_xcb::GamepadAxisEvent(uint8_t id, input_event event) {
     if(pad.axes[a.eAXIS] == fval) return;  // deadzone
     if(a.eAXIS==eAXIS_LY || a.eAXIS==eAXIS_RY) fval=-fval; // flip y axis
     if(a.flip) fval=-fval;
-    eventFIFO.push(GPadAxis(id, a.eAXIS, fval));
+    eventFIFO.push(gpadAxis(id, a.eAXIS, fval));
 }
 
 /*
@@ -1082,14 +1082,14 @@ void Window_xcb::SetGamepadRumble(int index, uint16_t weak, uint16_t strong) {  
     }
 
 
-    const char* Window_xcb::GetClipboardText() {
+    const char* Window_xcb::getClipboardText() {
         RequestClipboard();  // triggers XCB_SELECTION_NOTIFY event
         xcb_generic_event_t* event = xcb_wait_for_event(xcb_connection);
         TranslateEvent(event);
         return clipboard.c_str();
     }
 
-    void Window_xcb::SetClipboardText(const char* str) {
+    void Window_xcb::setClipboardText(const char* str) {
         clipboard = str;
         xcb_set_selection_owner(xcb_connection, xcb_window, atom_CLIPBOARD, XCB_CURRENT_TIME);
         xcb_flush(xcb_connection);

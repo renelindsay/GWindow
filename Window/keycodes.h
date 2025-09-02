@@ -3,11 +3,11 @@
 * These are the standard, platform-independent USB HID keyboard codes,
 * as defined at: http://www.freebsddiary.org/APC/usb_hid_usages.php
 *
-* These Keycodes are returned by the OnKeyEvent, in the Window class,
+* These Keycodes are returned by the onKeyEvent, in the Window class,
 * whenever a key is pressed or released.
 * In order to provide consistent results across all platforms, the Window_###
 * class converts the native platform-specific scancodes to these cross-platform
-* USB HID codes, before returning it in the OnKeyEvent.
+* USB HID codes, before returning it in the onKeyEvent.
 *
 * The layout of these keycodes are fixed, and the names correspond to a
 * US keyboard layout. Unlike the key symbols, these keycodes do not change
@@ -18,7 +18,7 @@
 * dvorak keyboards, even though it is the same physical key.
 *
 * Therefore, use these keycodes for game controls, to ensure a consistent layout,
-* but when text input is required, use the OnTextEvent instead, to get the correct
+* but when text input is required, use the onTextEvent instead, to get the correct
 * text symbol, according to the current configured keyboard layout settings.
 *
 * Contacts for feedback:

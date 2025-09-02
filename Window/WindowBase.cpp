@@ -8,27 +8,27 @@
 #include "WindowBase.h"
 
 //--Events--
-EventType WindowBase::MouseEvent(eAction action, int16_t x, int16_t y, uint8_t btn) {
+EventType WindowBase::mouseEvent(eAction action, int16_t x, int16_t y, uint8_t btn) {
     mouse.pos = {x, y};
     if (action != eMOVE) mouse.btn[btn] = (action == eDOWN);  // Keep track of button state
     EventType e = {EventType::MOUSE, {action, x, y, btn}};
     return e;
 }
 
-EventType WindowBase::KeyEvent(eAction action, uint8_t key) {
+EventType WindowBase::keyEvent(eAction action, uint8_t key) {
     keystate[key] = (action == eDOWN);
     EventType e   = {EventType::KEY};
     e.key         = {action, (eKeycode)key};
     return e;
 }
 
-EventType WindowBase::TextEvent(const char* str) {
+EventType WindowBase::textEvent(const char* str) {
     EventType e = {EventType::TEXT};
     e.text.str  = str;
     return e;
 }
 
-EventType WindowBase::MoveEvent(int16_t x, int16_t y) {
+EventType WindowBase::moveEvent(int16_t x, int16_t y) {
     shape.x     = x;
     shape.y     = y;
     EventType e = {EventType::MOVE};
@@ -36,11 +36,11 @@ EventType WindowBase::MoveEvent(int16_t x, int16_t y) {
     return e;
 }
 
-EventType WindowBase::ResizeEvent(uint16_t width, uint16_t height) {
-    this->resized = true;
+EventType WindowBase::resizeEvent(uint16_t width, uint16_t height) {
+    this->is_resized = true;
     shape.width  = width;
     shape.height = height;
-    //float scale = GetScale();
+    //float scale = getScale();
     EventType e  = {EventType::RESIZE};
     e.resize     = {width, height};
     //e.resize.width = width / scale;
@@ -48,14 +48,14 @@ EventType WindowBase::ResizeEvent(uint16_t width, uint16_t height) {
     return e;
 }
 
-EventType WindowBase::FocusEvent(bool has_focus) {
+EventType WindowBase::focusEvent(bool has_focus) {
     this->has_focus   = has_focus;
     EventType e       = {EventType::FOCUS};
     e.focus.has_focus = has_focus;
     return e;
 }
 
-EventType WindowBase::GPadConnect(uint8_t pad, bool active) {
+EventType WindowBase::gpadConnect(uint8_t pad, bool active) {
     gamepad[pad].active = active;
     EventType e = {EventType::GPAD_CONNECT};
     e.gp_connect.pad = pad;
@@ -63,7 +63,7 @@ EventType WindowBase::GPadConnect(uint8_t pad, bool active) {
     return e;
 }
 
-EventType WindowBase::GPadButton(uint8_t pad, uint8_t btn, bool down) {
+EventType WindowBase::gpadButton(uint8_t pad, uint8_t btn, bool down) {
     gamepad[pad].buttons[btn] = down;
     EventType e = {EventType::GPAD_BUTTON};
     e.gp_button.pad = pad;
@@ -72,7 +72,7 @@ EventType WindowBase::GPadButton(uint8_t pad, uint8_t btn, bool down) {
     return e;
 }
 
-EventType WindowBase::GPadAxis(uint8_t pad, uint8_t axis, float val) {
+EventType WindowBase::gpadAxis(uint8_t pad, uint8_t axis, float val) {
     gamepad[pad].axes[axis] = val;
     EventType e = {EventType::GPAD_AXIS};
     e.gp_axis.pad  = pad;
@@ -81,35 +81,35 @@ EventType WindowBase::GPadAxis(uint8_t pad, uint8_t axis, float val) {
     return e;
 }
 
-EventType WindowBase::CloseEvent() {
+EventType WindowBase::closeEvent() {
     running = false;
     return {EventType::CLOSE};
 }
 //----------
 
-bool WindowBase::ProcessEvents(bool wait_for_event) {
-    EventType e = GetEvent(wait_for_event);
+bool WindowBase::processEvents(bool wait_for_event) {
+    EventType e = getEvent(wait_for_event);
     while (e.tag != EventType::NONE) {
-        running = ProcessEvent(e);  // Call event handlers
+        running = processEvent(e);  // Call event handlers
         if(!running) return false;
-        e = GetEvent();
+        e = getEvent();
     }
     return running;
 }
 
-bool WindowBase::ProcessEvent(EventType e) {
+bool WindowBase::processEvent(EventType e) {
     switch (e.tag) {
-       case EventType::MOUSE       : OnMouseEvent (e.mouse.action, e.mouse.x, e.mouse.y, e.mouse.btn);  break;
-       case EventType::KEY         : OnKeyEvent   (e.key.action, e.key.keycode);                        break;
-       case EventType::TEXT        : OnTextEvent  (e.text.str);                                         break;
-       case EventType::MOVE        : OnMoveEvent  (e.move.x, e.move.y);                                 break;
-       case EventType::RESIZE      : OnResizeEvent(e.resize.width, e.resize.height);                    break;
-       case EventType::FOCUS       : OnFocusEvent (e.focus.has_focus);                                  break;
-       case EventType::TOUCH       : OnTouchEvent (e.touch.action, e.touch.x, e.touch.y, e.touch.id);   break;
-       case EventType::GPAD_CONNECT: OnGPadConnect(e.gp_connect.pad, e.gp_connect.active);              break;
-       case EventType::GPAD_BUTTON : OnGPadButton (e.gp_button.pad, e.gp_button.btn, e.gp_button.down); break;
-       case EventType::GPAD_AXIS   : OnGPadAxis   (e.gp_axis.pad, e.gp_axis.axis, e.gp_axis.val);       break;
-       case EventType::CLOSE       : OnCloseEvent (); return false;
+       case EventType::MOUSE       : onMouseEvent (e.mouse.action, e.mouse.x, e.mouse.y, e.mouse.btn);  break;
+       case EventType::KEY         : onKeyEvent   (e.key.action, e.key.keycode);                        break;
+       case EventType::TEXT        : onTextEvent  (e.text.str);                                         break;
+       case EventType::MOVE        : onMoveEvent  (e.move.x, e.move.y);                                 break;
+       case EventType::RESIZE      : onResizeEvent(e.resize.width, e.resize.height);                    break;
+       case EventType::FOCUS       : onFocusEvent (e.focus.has_focus);                                  break;
+       case EventType::TOUCH       : onTouchEvent (e.touch.action, e.touch.x, e.touch.y, e.touch.id);   break;
+       case EventType::GPAD_CONNECT: onGpadConnect(e.gp_connect.pad, e.gp_connect.active);              break;
+       case EventType::GPAD_BUTTON : onGpadButton (e.gp_button.pad, e.gp_button.btn, e.gp_button.down); break;
+       case EventType::GPAD_AXIS   : onGpadAxis   (e.gp_axis.pad, e.gp_axis.axis, e.gp_axis.val);       break;
+       case EventType::CLOSE       : onCloseEvent (); return false;
        default: break;
     }
     return true;

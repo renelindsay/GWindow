@@ -39,11 +39,11 @@
 * These are the standard, platform-independent USB HID keyboard codes,
 * as defined at: http://www.freebsddiary.org/APC/usb_hid_usages.php
 *
-* These Keycodes are returned by the OnKeyEvent, in the Window class,
+* These Keycodes are returned by the onKeyEvent, in the Window class,
 * whenever a key is pressed or released.
 * In order to provide consistent results across all platforms, the Window_###
 * class converts the native platform-specific scancodes to these cross-platform
-* USB HID codes, before returning it in the OnKeyEvent.
+* USB HID codes, before returning it in the onKeyEvent.
 *
 * The layout of these keycodes are fixed, and the names correspond to a
 * US keyboard layout. Unlike the key symbols, these keycodes do not change
@@ -54,7 +54,7 @@
 * dvorak keyboards, even though it is the same physical key.
 *
 * Therefore, use these keycodes for game controls, to ensure a consistent layout,
-* but when text input is required, use the OnTextEvent instead, to get the correct
+* but when text input is required, use the onTextEvent instead, to get the correct
 * text symbol, according to the current configured keyboard layout settings.
 *
 * Contacts for feedback:
@@ -231,7 +231,7 @@ enum eGamepadAxis {
 /*
 *--------------------------------------------------------------------------
 * FIFO Buffer is used in the few cases where event messages need to be buffered or swapped.
-* EventType contains a union struct of all possible message types that may be returned by GetEvent.
+* EventType contains a union struct of all possible message types that may be returned by getEvent.
 * WindowBase is the abstract base class for all the platform-specific window classes.
 *--------------------------------------------------------------------------
 */
@@ -339,85 +339,85 @@ protected:
     Gamepad gamepad[MAX_GAMEPADS];                                             // gamepad state
 
     EventFIFO eventFIFO;                                                       // Event message queue buffer
-    EventType MouseEvent (eAction action, int16_t x, int16_t y, uint8_t btn);  // Mouse event
-    EventType KeyEvent   (eAction action, uint8_t key);                        // Keyboard event
-    EventType TextEvent  (const char* str);                                    // Text event
-    EventType MoveEvent  (int16_t x, int16_t y);                               // Window moved
-    EventType ResizeEvent(uint16_t width, uint16_t height);                    // Window resized
-    EventType FocusEvent (bool has_focus);                                     // Window gained/lost focus   
-    EventType GPadConnect(uint8_t pad, bool active);                           // Gamepad connect/disconnect
-    EventType GPadButton (uint8_t pad, uint8_t btn, bool down);                // Gamepad button event
-    EventType GPadAxis   (uint8_t pad, uint8_t axis, float val);               // Gamepad axis events
-    EventType CloseEvent ();                                                   // Window closing
+    EventType mouseEvent (eAction action, int16_t x, int16_t y, uint8_t btn);  // Mouse event
+    EventType keyEvent   (eAction action, uint8_t key);                        // Keyboard event
+    EventType textEvent  (const char* str);                                    // Text event
+    EventType moveEvent  (int16_t x, int16_t y);                               // Window moved
+    EventType resizeEvent(uint16_t width, uint16_t height);                    // Window resized
+    EventType focusEvent (bool has_focus);                                     // Window gained/lost focus   
+    EventType gpadConnect(uint8_t pad, bool active);                           // Gamepad connect/disconnect
+    EventType gpadButton (uint8_t pad, uint8_t btn, bool down);                // Gamepad button event
+    EventType gpadAxis   (uint8_t pad, uint8_t axis, float val);               // Gamepad axis events
+    EventType closeEvent ();                                                   // Window closing
 
     float display_scale = 0.f;
     bool running;
     bool has_focus;                                                            // true if window has focus
-    bool resized;                                                              // true if window has been resized
+    bool is_resized;                                                           // true if window has been resized
     bool fullscreen;                                                           // true if window is fullscreen
     struct shape_t { int16_t x; int16_t y; uint16_t width; uint16_t height; } shape = {};  // window shape
     std::string clipboard;
 
   public:
-    WindowBase() : running(false), has_focus(false), resized(false), fullscreen(false){}
+    WindowBase() : running(false), has_focus(false), is_resized(false), fullscreen(false){}
     virtual ~WindowBase() {}
-    virtual void Close() { eventFIFO.push(CloseEvent()); }
+    virtual void close() { eventFIFO.push(closeEvent()); }
 
     //--State query functions--
-    //shape_t GetShape (){return shape;}                                             // return window shape in pixels
-    void  GetPosition(int16_t& x, int16_t& y) { x = shape.x; y = shape.y; }                  // return window position
-    void  GetSize(int16_t& width, int16_t& height) { width = Width(); height = Height(); }   // return window size
-    void  GetSize(int32_t& width, int32_t& height) { width = Width(); height = Height(); }   // return window size
-    bool  GetKeyState(eKeycode key) { return keystate[key]; }                      // return true if key is pressed
-    bool  GetBtnState(uint8_t  btn) { return (btn < 6) ? mouse.btn[btn] : 0; }     // return true if mouse btn is pressed
-    void  GetMousePos(int16_t& x, int16_t& y) {x = mouse.pos.x; y = mouse.pos.y;}  // return mouse x,y position
-    Gamepad& GetGamepad(uint8_t pad) {return gamepad[pad];}                        // return the gamepad state
+    //shape_t GetShape (){return shape;}                                           // return window shape in pixels
+    void  getPosition(int16_t& x, int16_t& y) { x = shape.x; y = shape.y; }        // return window position
+    void  getSize(int16_t& w, int16_t& h) { w = width(); h = height(); }           // return window size
+    void  getSize(int32_t& w, int32_t& h) { w = width(); h = height(); }           // return window size
+    bool  getKeyState(eKeycode key) { return keystate[key]; }                      // return true if key is pressed
+    bool  getBtnState(uint8_t  btn) { return (btn < 6) ? mouse.btn[btn] : 0; }     // return true if mouse btn is pressed
+    void  getMousePos(int16_t& x, int16_t& y) {x = mouse.pos.x; y = mouse.pos.y;}  // return mouse x,y position
+    Gamepad& getGamepad(uint8_t pad) {return gamepad[pad];}                        // return the gamepad state
 
-    bool IsRunning() { return running; }
-    uint Width() {return shape.width; }
-    uint Height(){return shape.height;}
-    bool Resized() { bool resize = resized; resized = false; return resize; }
-    float GetScale() {return (display_scale>0)? display_scale : GetDisplayScale();}
-    void  SetScale(float val) {display_scale = val;}
+    bool isRunning() { return running; }
+    uint width() {return shape.width; }
+    uint height(){return shape.height;}
+    bool resized() { bool resize = is_resized; is_resized = false; return resize; }
+    float getScale() {return (display_scale>0)? display_scale : getDisplayScale();}
+    void  setScale(float val) {display_scale = val;}
 
-    virtual float GetDisplayScale() {return 1.f;}
-    virtual bool IsFullscreen() {return fullscreen;}
+    virtual float getDisplayScale() {return 1.f;}
+    virtual bool isFullscreen() {return fullscreen;}
 
     //--Clipboard--
-    virtual const char* GetClipboardText() {return clipboard.c_str(); }  // Fallback implementation works only locally.
-    virtual void SetClipboardText(const char* str) { clipboard = str; }  // Platform implementations overrides this.
+    virtual const char* getClipboardText() {return clipboard.c_str(); }  // Fallback implementation works only locally.
+    virtual void setClipboardText(const char* str) { clipboard = str; }  // Platform implementations overrides this.
 
     //--Control functions--
-    virtual void ShowKeyboard(bool enabled) {}                    // Shows the Android soft-keyboard.
-    virtual void SetTitle(const char* title) {}
-    virtual void SetPosition(uint x, uint y) {}
-    virtual void SetSize(uint w, uint h) {}
-    virtual const void* GetNativeHandle() const = 0;              // For creating Vulkan/OpenGL Surface
-    virtual void ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {}
-    virtual void SetCursor(eCursor id) {}
-    virtual void SetFullscreen(bool enable) {}
-    void SetSizeScaled(uint w, uint h) {float s=GetScale(); SetSize(w*s, h*s);}
+    virtual void showKeyboard(bool enabled) {}                    // Shows the Android soft-keyboard.
+    virtual void setTitle(const char* title) {}
+    virtual void setPosition(uint x, uint y) {}
+    virtual void setSize(uint w, uint h) {}
+    virtual const void* getNativeHandle() const = 0;              // For creating Vulkan/OpenGL Surface
+    virtual void showImage(uint32_t* buf, uint32_t width, uint32_t height) {}
+    virtual void setCursor(eCursor id) {}
+    virtual void setFullscreen(bool enable) {}
+    void setSizeScaled(uint w, uint h) {float s=getScale(); setSize(w*s, h*s);}
 
     //--Event loop--
-    virtual EventType GetEvent(bool wait_for_event = false) = 0;  // Fetch one event from the queue.
-    bool ProcessEvents(bool wait_for_event = false);              // Dispatch all waiting events to event handlers. Returns false if window is closing.
-    bool ProcessEvent (EventType e);                              // Dispatch/inject the given event to event handlers.
-    bool PollEvents() { return ProcessEvents(false); }            // Run continuously
-    bool WaitEvents() { return ProcessEvents(true ); }            // Pause app when there are no events to process
-    // void Run(){ while(ProcessEvents()){} }                     // Run message loop until window is closed.
+    virtual EventType getEvent(bool wait_for_event = false) = 0;  // Fetch one event from the queue.
+    bool processEvents(bool wait_for_event = false);              // Dispatch all waiting events to event handlers. Returns false if window is closing.
+    bool processEvent (EventType e);                              // Dispatch/inject the given event to event handlers.
+    bool pollEvents() { return processEvents(false); }            // Run continuously
+    bool waitEvents() { return processEvents(true ); }            // Pause app when there are no events to process
+    // void Run(){ while(processEvents()){} }                     // Run message loop until window is closed.
 
     //-- Virtual Functions as event handlers --
-    virtual void OnMouseEvent(eAction action, int16_t x, int16_t y, uint8_t btn) {}  // Callback for mouse events
-    virtual void OnKeyEvent(eAction action, eKeycode keycode) {}                     // Callback for keyboard events (keycodes)
-    virtual void OnTextEvent(const char *str) {}                                     // Callback for text typed events (text)
-    virtual void OnMoveEvent(int16_t x, int16_t y) {}                                // Callback for window move events
-    virtual void OnResizeEvent(uint16_t width, uint16_t height) {}                   // Callback for window resize events
-    virtual void OnFocusEvent(bool hasFocus) {}                                      // Callback for window gain/lose focus events
-    virtual void OnTouchEvent(eAction action, float x, float y, uint8_t id) {}       // Callback for Multi-touch events
-    virtual void OnGPadConnect(uint8_t pad, bool active){}                           // Callback for Joystick connect/disconnect
-    virtual void OnGPadButton(uint8_t pad, uint8_t btn, bool down){}                 // Callback for Joystick button events
-    virtual void OnGPadAxis(uint8_t pad, uint8_t axis, float val){}                  // Callback for Joystick axis events
-    virtual void OnCloseEvent() {}                                                   // Callback for window closing event
+    virtual void onMouseEvent(eAction action, int16_t x, int16_t y, uint8_t btn) {}  // Callback for mouse events
+    virtual void onKeyEvent(eAction action, eKeycode keycode) {}                     // Callback for keyboard events (keycodes)
+    virtual void onTextEvent(const char *str) {}                                     // Callback for text typed events (text)
+    virtual void onMoveEvent(int16_t x, int16_t y) {}                                // Callback for window move events
+    virtual void onResizeEvent(uint16_t width, uint16_t height) {}                   // Callback for window resize events
+    virtual void onFocusEvent(bool hasFocus) {}                                      // Callback for window gain/lose focus events
+    virtual void onTouchEvent(eAction action, float x, float y, uint8_t id) {}       // Callback for Multi-touch events
+    virtual void onGpadConnect(uint8_t pad, bool active){}                           // Callback for Joystick connect/disconnect
+    virtual void onGpadButton(uint8_t pad, uint8_t btn, bool down){}                 // Callback for Joystick button events
+    virtual void onGpadAxis(uint8_t pad, uint8_t axis, float val){}                  // Callback for Joystick axis events
+    virtual void onCloseEvent() {}                                                   // Callback for window closing event
 };
 //==============================================================
 
@@ -1135,7 +1135,7 @@ class Window_win32 : public WindowBase {
     RECT rect;            // Save window rect while in fullscreen mode
     DWORD style;          // Save window stype while in fullscreen mode
     CMTouch MTouch;       // Multi-Touch device
-    HBITMAP DIB = 0;      // For ShowImage().  Holds image to display.
+    HBITMAP DIB = 0;      // For showImage().  Holds image to display.
     HCURSOR cursors[12];  // For mouse cursors
 
     void Create(const char* title="Window", uint width=640, uint height=480);
@@ -1143,29 +1143,29 @@ class Window_win32 : public WindowBase {
     void ReadGamepadEvents();
     void EnableDPIAware();
 public:
-    void SetTitle(const char* title);
-    void SetPosition(uint x, uint y);
-    void SetSize(uint w, uint h);
+    void setTitle(const char* title);
+    void setPosition(uint x, uint y);
+    void setSize(uint w, uint h);
 
 public:
     Window_win32(){Create();};
     Window_win32(const char* title, uint width, uint height);
     virtual ~Window_win32();
-    EventType GetEvent(bool wait_for_event = false);
-    const void* GetNativeHandle() const {return &hInstance;};
-    float GetDisplayScale();
+    EventType getEvent(bool wait_for_event = false);
+    const void* getNativeHandle() const {return &hInstance;};
+    float getDisplayScale();
 #ifdef ENABLE_SHOWIMAGE
-    void ShowImage(uint32_t* buf, uint32_t width, uint32_t height);
+    void showImage(uint32_t* buf, uint32_t width, uint32_t height);
 #endif
 #ifdef ENABLE_CURSOR
-    void SetCursor(eCursor id);
+    void setCursor(eCursor id);
 #endif
 #ifdef ENABLE_CLIPBOARD
-    void SetClipboardText(const char* text) override;
-    const char* GetClipboardText() override;
+    void setClipboardText(const char* text) override;
+    const char* getClipboardText() override;
 #endif
 #ifdef ENABLE_FULLSCREEN
-    void SetFullscreen(bool enable);
+    void setFullscreen(bool enable);
 #endif
 
 };
@@ -1240,31 +1240,31 @@ void Window_win32::Create(const char* title, uint width, uint height) {
     cursors[10]= LoadCursor(NULL, IDC_NO);          // Not Allowed
 #endif
 
-    eventFIFO.push(ResizeEvent(width, height));
+    eventFIFO.push(resizeEvent(width, height));
 }
 
 Window_win32::~Window_win32() { DestroyWindow(hWnd); }
 
-void Window_win32::SetTitle(const char* title) { SetWindowText(hWnd, title); }
+void Window_win32::setTitle(const char* title) { SetWindowText(hWnd, title); }
 
-void Window_win32::SetPosition(uint x, uint y) {
+void Window_win32::setPosition(uint x, uint y) {
     SetWindowPos(hWnd, NULL, x, y, 0, 0, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOSIZE);
-    if (x != shape.x || y != shape.y) eventFIFO.push(MoveEvent(x, y));  // Trigger window moved event
+    if (x != shape.x || y != shape.y) eventFIFO.push(moveEvent(x, y));  // Trigger window moved event
 }
 
-void Window_win32::SetSize(uint w, uint h) {
+void Window_win32::setSize(uint w, uint h) {
     RECT wr = {0, 0, (LONG)w, (LONG)h};
     AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);  // Add border size to create desired client area size
     int total_width = wr.right - wr.left;
     int total_height = wr.bottom - wr.top;
     SetWindowPos(hWnd, NULL, 0, 0, total_width, total_height, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE);
-    if ((w != shape.width) | (h != shape.height)) eventFIFO.push(ResizeEvent(w, h));  // Trigger resize event
+    if ((w != shape.width) | (h != shape.height)) eventFIFO.push(resizeEvent(w, h));  // Trigger resize event
 }
 
 #define WM_RESHAPE (WM_USER + 0)
 #define WM_ACTIVE  (WM_USER + 1)
 
-EventType Window_win32::GetEvent(bool wait_for_event) {
+EventType Window_win32::getEvent(bool wait_for_event) {
     // EventType event;
     if (!eventFIFO.isEmpty()) return eventFIFO.pop();
 
@@ -1281,8 +1281,8 @@ EventType Window_win32::GetEvent(bool wait_for_event) {
         if (msg.message == WM_KEYDOWN || msg.message == WM_KEYUP) {
             if (msg.wParam == VK_CONTROL) msg.wParam = (msg.lParam & (1 << 24)) ? VK_RCONTROL : VK_LCONTROL;
             if (msg.wParam == VK_SHIFT) {
-                if (!!(::GetKeyState(VK_LSHIFT) & 128) != GetKeyState(eKEY_LeftShift )) PostMessage(hWnd, msg.message, VK_LSHIFT, 0);
-                if (!!(::GetKeyState(VK_RSHIFT) & 128) != GetKeyState(eKEY_RightShift)) PostMessage(hWnd, msg.message, VK_RSHIFT, 0);
+                if (!!(::GetKeyState(VK_LSHIFT) & 128) != getKeyState(eKEY_LeftShift )) PostMessage(hWnd, msg.message, VK_LSHIFT, 0);
+                if (!!(::GetKeyState(VK_RSHIFT) & 128) != getKeyState(eKEY_RightShift)) PostMessage(hWnd, msg.message, VK_RSHIFT, 0);
                 return {EventType::NONE};
             }
         } else if (msg.message == WM_SYSKEYDOWN || msg.message == WM_SYSKEYUP) {
@@ -1291,16 +1291,16 @@ EventType Window_win32::GetEvent(bool wait_for_event) {
         //-----------------------------------------------------------------------------------------------------------------
 
         static char buf[4] = {};
-        uint8_t bestBtn = GetBtnState(1) ? 1 : GetBtnState(2) ? 2 : GetBtnState(3) ? 3 : 0;
+        uint8_t bestBtn = getBtnState(1) ? 1 : getBtnState(2) ? 2 : getBtnState(3) ? 3 : 0;
         switch (msg.message) {
             //--Mouse events--
-            case WM_MOUSEMOVE  : return MouseEvent(eMOVE, x, y, bestBtn);
-            case WM_LBUTTONDOWN: return MouseEvent(eDOWN, x, y, 1);
-            case WM_MBUTTONDOWN: return MouseEvent(eDOWN, x, y, 2);
-            case WM_RBUTTONDOWN: return MouseEvent(eDOWN, x, y, 3);
-            case WM_LBUTTONUP  : return MouseEvent(eUP  , x, y, 1);
-            case WM_MBUTTONUP  : return MouseEvent(eUP  , x, y, 2);
-            case WM_RBUTTONUP  : return MouseEvent(eUP  , x, y, 3);
+            case WM_MOUSEMOVE  : return mouseEvent(eMOVE, x, y, bestBtn);
+            case WM_LBUTTONDOWN: return mouseEvent(eDOWN, x, y, 1);
+            case WM_MBUTTONDOWN: return mouseEvent(eDOWN, x, y, 2);
+            case WM_RBUTTONDOWN: return mouseEvent(eDOWN, x, y, 3);
+            case WM_LBUTTONUP  : return mouseEvent(eUP  , x, y, 1);
+            case WM_MBUTTONUP  : return mouseEvent(eUP  , x, y, 2);
+            case WM_RBUTTONUP  : return mouseEvent(eUP  , x, y, 3);
             //--Mouse wheel events--
             case WM_MOUSEWHEEL: {
                 uint8_t wheel = (GET_WHEEL_DELTA_WPARAM(msg.wParam) > 0) ? 4 : 5;
@@ -1309,40 +1309,40 @@ EventType Window_win32::GetEvent(bool wait_for_event) {
                 return {EventType::MOUSE, {eDOWN, (int16_t)point.x, (int16_t)point.y, wheel}};
             }
             //--Keyboard events--
-            case WM_KEYDOWN   : return KeyEvent(eDOWN, WIN32_TO_HID[msg.wParam]);
-            case WM_KEYUP     : return KeyEvent(eUP  , WIN32_TO_HID[msg.wParam]);
+            case WM_KEYDOWN   : return keyEvent(eDOWN, WIN32_TO_HID[msg.wParam]);
+            case WM_KEYUP     : return keyEvent(eUP  , WIN32_TO_HID[msg.wParam]);
             case WM_SYSKEYDOWN: {MSG discard; GetMessage(&discard, NULL, 0, 0);     // Alt-key triggers a WM_MOUSEMOVE message... Discard it.
-                                return KeyEvent(eDOWN, WIN32_TO_HID[msg.wParam]); } // +alt key
-            case WM_SYSKEYUP  : return KeyEvent(eUP  , WIN32_TO_HID[msg.wParam]);   // +alt key
+                                return keyEvent(eDOWN, WIN32_TO_HID[msg.wParam]); } // +alt key
+            case WM_SYSKEYUP  : return keyEvent(eUP  , WIN32_TO_HID[msg.wParam]);   // +alt key
 
             //--Char event--
-            case WM_CHAR: { strncpy_s(buf, (const char*)&msg.wParam, 4);  return TextEvent(buf); }  // return UTF8 code of key pressed
+            case WM_CHAR: { strncpy_s(buf, (const char*)&msg.wParam, 4);  return textEvent(buf); }  // return UTF8 code of key pressed
             //--Window events--
-            case WM_ACTIVE: { return FocusEvent(msg.wParam != WA_INACTIVE); }
+            case WM_ACTIVE: { return focusEvent(msg.wParam != WA_INACTIVE); }
 
             case WM_RESHAPE: {
                 if (!has_focus) {
                     PostMessage(hWnd, WM_RESHAPE, msg.wParam, msg.lParam);  // Repost this event to the queue
-                    return FocusEvent(true);                                // Activate window before reshape
+                    return focusEvent(true);                                // Activate window before reshape
                 }
 
                 RECT r;
                 GetClientRect(hWnd, &r);
                 uint16_t w = (uint16_t)(r.right - r.left);
                 uint16_t h = (uint16_t)(r.bottom - r.top);
-                if (w != shape.width || h != shape.height) return ResizeEvent(w, h);  // window resized
+                if (w != shape.width || h != shape.height) return resizeEvent(w, h);  // window resized
 
                 GetWindowRect(hWnd, &r);
                 int16_t x = (int16_t)r.left;
                 int16_t y = (int16_t)r.top;
-                if (x != shape.x || y != shape.y) return MoveEvent(x, y);  // window moved
+                if (x != shape.x || y != shape.y) return moveEvent(x, y);  // window moved
                 break;
             }
             case WM_CLOSE: {
                 if(msg.hwnd == hWnd) {
                     //printf("WM_CLOSE\n");
                     if(DIB) {DeleteObject(DIB); DIB=0;}
-                    return CloseEvent();
+                    return closeEvent();
                 }
                 break;
             }
@@ -1354,7 +1354,7 @@ EventType Window_win32::GetEvent(bool wait_for_event) {
                     HBITMAP hOldBitmap = (HBITMAP)SelectObject(hMemDC, DIB);
                     int w = ps.rcPaint.right;
                     int h = ps.rcPaint.bottom;
-                    //float s = GetScale();
+                    //float s = getScale();
                     //StretchBlt(hDC, 0, 0, w*s, h*s, hMemDC, 0, 0, w, h, SRCCOPY);
                     BitBlt(hDC, 0, 0, w, h, hMemDC, 0, 0, SRCCOPY);
                     SelectObject(hMemDC, hOldBitmap);
@@ -1399,7 +1399,7 @@ static bool inClientArea = false;
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         case WM_CLOSE:
-            PostMessage(hWnd, WM_CLOSE, 0, 0);  // for OnCloseEvent
+            PostMessage(hWnd, WM_CLOSE, 0, 0);  // for onCloseEvent
             return 0;
         case WM_DESTROY:
             //LOGI("WM_DESTROY\n");
@@ -1441,13 +1441,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
-float Window_win32::GetDisplayScale() {
+float Window_win32::getDisplayScale() {
     int dpi = GetDpiForWindow(hWnd);
     //printf("dpi = %d\n", dpi);
     return dpi/96.f;
 }
 #ifdef ENABLE_SHOWIMAGE
-void Window_win32::ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {  // using GDI only
+void Window_win32::showImage(uint32_t* buf, uint32_t width, uint32_t height) {  // using GDI only
     if(DIB) {DeleteObject(DIB); DIB=0;}  // delete previous bitmap
     BITMAPINFO bmi{};
     bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -1465,7 +1465,7 @@ void Window_win32::ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {  
 #endif
 
 #ifdef ENABLE_CURSOR
-void Window_win32::SetCursor(eCursor id) {      // Override mouse cursor,
+void Window_win32::setCursor(eCursor id) {      // Override mouse cursor,
     if(inClientArea) ::SetCursor(cursors[id]);  // but not on window edges
 }
 #endif
@@ -1482,7 +1482,7 @@ void Window_win32::DetectGamepads() {
         XINPUT_STATE state;
         Gamepad& pad = gamepad[i];
         bool active = (XInputGetState(i, &state) == ERROR_SUCCESS);
-        if(active != pad.active) eventFIFO.push(GPadConnect(i, active));
+        if(active != pad.active) eventFIFO.push(gpadConnect(i, active));
     }
 }
 
@@ -1496,7 +1496,7 @@ void Window_win32::ReadGamepadEvents() {
 
         auto btnCheck = [&](eGamepadBtn btn, bool isDown) {
             if(pad.buttons[btn] == isDown) return;
-            eventFIFO.push(GPadButton(i, btn, isDown));
+            eventFIFO.push(gpadButton(i, btn, isDown));
         };
 
         WORD buttons = state.Gamepad.wButtons;
@@ -1518,7 +1518,7 @@ void Window_win32::ReadGamepadEvents() {
 
         auto axisCheck = [&](eGamepadAxis axis, float val) {
             if(pad.axes[axis] == val) return;
-            eventFIFO.push(GPadAxis(i, axis, val));
+            eventFIFO.push(gpadAxis(i, axis, val));
         };
 
         axisCheck(eAXIS_LX, state.Gamepad.sThumbLX / 32767.f);
@@ -1537,7 +1537,7 @@ void Window_win32::ReadGamepadEvents() {
 
 //---- Clipboard ----
 #ifdef ENABLE_CLIPBOARD
-    void Window_win32::SetClipboardText(const char* text) {
+    void Window_win32::setClipboardText(const char* text) {
         if (!OpenClipboard(nullptr)) return;
         EmptyClipboard();
 
@@ -1551,7 +1551,7 @@ void Window_win32::ReadGamepadEvents() {
         CloseClipboard();
     }
 
-    const char* Window_win32::GetClipboardText() {
+    const char* Window_win32::getClipboardText() {
         if (!OpenClipboard(nullptr)) return nullptr;
 
         HANDLE hData = GetClipboardData(CF_TEXT);
@@ -1570,7 +1570,7 @@ void Window_win32::ReadGamepadEvents() {
 //-------------------
 
 #ifdef ENABLE_FULLSCREEN
-    void Window_win32::SetFullscreen(bool enable) {
+    void Window_win32::setFullscreen(bool enable) {
         if(enable==fullscreen) return;
         fullscreen = enable;
 
@@ -1586,7 +1586,7 @@ void Window_win32::ReadGamepadEvents() {
             HMONITOR hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
             MONITORINFO mi = { sizeof(mi) };
             if (GetMonitorInfo(hMonitor, &mi)) {
-                float scale = GetDisplayScale();
+                float scale = getDisplayScale();
                 int x = int(mi.rcMonitor.left / scale);
                 int y = int(mi.rcMonitor.top / scale);
                 int w = int((mi.rcMonitor.right - mi.rcMonitor.left) / scale);
@@ -1653,7 +1653,7 @@ void Window_win32::EnableDPIAware() {
 #include <stdlib.h>               // atof
 #include <assert.h>
 #ifdef ENABLE_SHOWIMAGE
-#include <xcb/xcb_image.h>        // ShowImage  libxcb-image0-dev
+#include <xcb/xcb_image.h>        // showImage  libxcb-image0-dev
 #endif
 #ifdef ENABLE_CURSOR
 #include <xcb/xcb_cursor.h>       // mouse cursor icons
@@ -1804,25 +1804,25 @@ class Window_xcb : public WindowBase {
     xcb_atom_t GetAtom(const char* name, bool only_if_exists = false);
 
   public:
-    void SetTitle(const char* title);
-    void SetPosition(uint x, uint y);
-    void SetSize(uint w, uint h);
+    void setTitle(const char* title);
+    void setPosition(uint x, uint y);
+    void setSize(uint w, uint h);
     //void CreateSurface(VkInstance instance);
 
     Window_xcb() {Create();}
     Window_xcb(const char* title, uint width, uint height);
     virtual ~Window_xcb();
-    EventType GetEvent(bool wait_for_event = false);
+    EventType getEvent(bool wait_for_event = false);
     //bool CanPresent(VkPhysicalDevice phy, uint32_t queue_family);  // check if this window can present this queue type
-    const void* GetNativeHandle() const {return &xcb_connection;}
-    float GetDisplayScale();
+    const void* getNativeHandle() const {return &xcb_connection;}
+    float getDisplayScale();
 #ifdef ENABLE_SHOWIMAGE
-    void ShowImage(uint32_t* buf, uint32_t width, uint32_t height);
+    void showImage(uint32_t* buf, uint32_t width, uint32_t height);
 #endif
-    void SetCursor(eCursor id);
+    void setCursor(eCursor id);
 #ifdef ENABLE_FULLSCREEN
-    void SetFullscreen(bool enable);
-    bool IsFullscreen();
+    void setFullscreen(bool enable);
+    bool isFullscreen();
 #endif
 
 #ifdef ENABLE_CLIPBOARD
@@ -1836,8 +1836,8 @@ private:
     void InitClipboard();
     bool RequestClipboard();
 public:
-    virtual const char* GetClipboardText();
-    virtual void SetClipboardText(const char* str);
+    virtual const char* getClipboardText();
+    virtual void setClipboardText(const char* str);
 #else
     void InitClipboard(){};
 #endif
@@ -1902,7 +1902,7 @@ void Window_xcb::Create(const char* title, uint width, uint height) {
                     XCB_EVENT_MASK_POINTER_MOTION |     // 64       motion with no mouse button held
                     XCB_EVENT_MASK_BUTTON_MOTION  |     // 8192     motion with one or more mouse buttons held
                   //XCB_EVENT_MASK_KEYMAP_STATE |       // 16384
-                  //XCB_EVENT_MASK_EXPOSURE |           // 32768    Make ShowImage persistant
+                  //XCB_EVENT_MASK_EXPOSURE |           // 32768    Make showImage persistant
                   //XCB_EVENT_MASK_VISIBILITY_CHANGE,   // 65536,
                     XCB_EVENT_MASK_STRUCTURE_NOTIFY |   // 131072   Window move/resize events
                   //XCB_EVENT_MASK_RESIZE_REDIRECT |    // 262144
@@ -1933,8 +1933,8 @@ void Window_xcb::Create(const char* title, uint width, uint height) {
     InitClipboard();
     //--------------------
 
-    SetTitle(title);
-    eventFIFO.push(ResizeEvent(width, height));  // ResizeEvent BEFORE focus, for consistency with win32 and android
+    setTitle(title);
+    eventFIFO.push(resizeEvent(width, height));  // resizeEvent BEFORE focus, for consistency with win32 and android
 
     //---- Mouse Cursor ----
 #ifdef ENABLE_CURSOR
@@ -1981,13 +1981,13 @@ Window_xcb::~Window_xcb() {
 #ifdef ENABLE_GAMEPAD
     for (int i = 0; i < MAX_GAMEPADS; ++i) { DisconnectGamepad(i); }
     if (watch_fd   != -1) { inotify_rm_watch(inotify_fd, watch_fd); watch_fd=-1;}
-    if (inotify_fd != -1) { close(inotify_fd); inotify_fd=-1; }
+    if (inotify_fd != -1) { ::close(inotify_fd); inotify_fd=-1; }
 #endif
     xcb_disconnect(xcb_connection);
     XFree(k_ctx);  // xkb keyboard
 }
 
-void Window_xcb::SetTitle(const char* title) {
+void Window_xcb::setTitle(const char* title) {
     xcb_change_property(xcb_connection, XCB_PROP_MODE_REPLACE, xcb_window, XCB_ATOM_WM_NAME,  // set window title
                         XCB_ATOM_STRING, 8, strlen(title), title);
     xcb_change_property(xcb_connection, XCB_PROP_MODE_REPLACE, xcb_window, XCB_ATOM_WM_ICON_NAME,  // set icon title
@@ -1996,13 +1996,13 @@ void Window_xcb::SetTitle(const char* title) {
     xcb_flush(xcb_connection);
 }
 
-void Window_xcb::SetPosition(uint x, uint y) {
+void Window_xcb::setPosition(uint x, uint y) {
     uint values[] = {x, y};
     xcb_configure_window(xcb_connection, xcb_window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, values);
     xcb_flush(xcb_connection);
 }
 
-void Window_xcb::SetSize(uint w, uint h) {
+void Window_xcb::setSize(uint w, uint h) {
     uint values[] = {w, h};
     xcb_configure_window(xcb_connection, xcb_window, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
     xcb_flush(xcb_connection);
@@ -2079,48 +2079,48 @@ EventType Window_xcb::TranslateEvent(xcb_generic_event_t* x_event) {
     int16_t mx = e.event_x;
     int16_t my = e.event_y;
     uint8_t btn= e.detail;
-    uint8_t bestBtn = GetBtnState(1) ? 1 : GetBtnState(2) ? 2 : GetBtnState(3) ? 3 : 0;  // If multiple buttons pressed, pick left one.
+    uint8_t bestBtn = getBtnState(1) ? 1 : getBtnState(2) ? 2 : getBtnState(3) ? 3 : 0;  // If multiple buttons pressed, pick left one.
     switch(x_event->response_type & ~0x80) {
-        case XCB_MOTION_NOTIFY : return MouseEvent(eMOVE, mx, my, bestBtn); // mouse move
-        case XCB_BUTTON_PRESS  : return MouseEvent(eDOWN, mx, my, btn);     // mouse btn press
-        case XCB_BUTTON_RELEASE: return MouseEvent(eUP  , mx, my, btn);     // mouse btn release
+        case XCB_MOTION_NOTIFY : return mouseEvent(eMOVE, mx, my, bestBtn); // mouse move
+        case XCB_BUTTON_PRESS  : return mouseEvent(eDOWN, mx, my, btn);     // mouse btn press
+        case XCB_BUTTON_RELEASE: return mouseEvent(eUP  , mx, my, btn);     // mouse btn release
         case XCB_KEY_PRESS:{
             //printf("btn %d", btn);
             uint8_t keycode = EVDEV_TO_HID[btn];                    // On Stratus XL gamepad, 2 buttons trigger keyboard events
             if(!keycode) {                                          // remap key to gamepad btn
-                if(btn==166) return GPadButton(0, eBTN_SELECT, 1);  // Steelseries Stratus XL: select button (XF86Back)
-                if(btn==180) return GPadButton(0, eBTN_MODE, 1);    // Steelseries Stratus XL: mode button   (XF86HomePage)
+                if(btn==166) return gpadButton(0, eBTN_SELECT, 1);  // Steelseries Stratus XL: select button (XF86Back)
+                if(btn==180) return gpadButton(0, eBTN_MODE, 1);    // Steelseries Stratus XL: mode button   (XF86HomePage)
             }
             xkb_state_key_get_utf8(k_state,btn,buf,sizeof(buf));
             xkb_state_update_key(k_state,btn,XKB_KEY_DOWN);
-            if(buf[0]) eventFIFO.push(TextEvent(buf));              // text typed event (store in FIFO for next run)
-            return KeyEvent(eDOWN, keycode);                        // key pressed event
+            if(buf[0]) eventFIFO.push(textEvent(buf));              // text typed event (store in FIFO for next run)
+            return keyEvent(eDOWN, keycode);                        // key pressed event
         }
         case XCB_KEY_RELEASE: {
             xkb_state_update_key(k_state, btn, XKB_KEY_UP);
             uint8_t keycode = EVDEV_TO_HID[btn];
             if(!keycode) {                                          // remap key to gamepad btn
-                if(btn==166) return GPadButton(0, eBTN_SELECT, 0);  // Steelseries Stratus XL
-                if(btn==180) return GPadButton(0, eBTN_MODE, 0);    // Steelseries Stratus XL
+                if(btn==166) return gpadButton(0, eBTN_SELECT, 0);  // Steelseries Stratus XL
+                if(btn==180) return gpadButton(0, eBTN_MODE, 0);    // Steelseries Stratus XL
             }
-            return KeyEvent(eUP, keycode);                          // key released event
+            return keyEvent(eUP, keycode);                          // key released event
         }
         case XCB_CLIENT_MESSAGE: {                                  // window close event
             if ((*(xcb_client_message_event_t*)x_event).data.data32[0] == atom_wm_delete_window) {
                 //printf("Closing Window\n");
-                return CloseEvent();
+                return closeEvent();
             }
             break;
         }
         case XCB_CONFIGURE_NOTIFY: {                                // Window Reshape (move or resize)
             auto& e = *(xcb_configure_notify_event_t*)x_event;
             //bool se = (e.response_type & 128);                    // True if message was sent with "SendEvent"
-            if (e.width != shape.width || e.height != shape.height) return ResizeEvent(e.width, e.height); // window resized
-            else if (e.x != shape.x || e.y != shape.y)              return MoveEvent(e.x, e.y);            // window moved
+            if (e.width != shape.width || e.height != shape.height) return resizeEvent(e.width, e.height); // window resized
+            else if (e.x != shape.x || e.y != shape.y)              return moveEvent(e.x, e.y);            // window moved
             break;
         }
-        case XCB_FOCUS_IN  : if (!has_focus) return FocusEvent(true);   // window gained focus
-        case XCB_FOCUS_OUT : if ( has_focus) return FocusEvent(false);  // window lost focus
+        case XCB_FOCUS_IN  : if (!has_focus) return focusEvent(true);   // window gained focus
+        case XCB_FOCUS_OUT : if ( has_focus) return focusEvent(false);  // window lost focus
 
         case XCB_GE_GENERIC: {                                            // Multi touch screen events
 #ifdef ENABLE_MULTITOUCH
@@ -2142,7 +2142,7 @@ EventType Window_xcb::TranslateEvent(xcb_generic_event_t* x_event) {
         }  // XCB_GE_GENERIC
 
 #ifdef ENABLE_SHOWIMAGE
-        case XCB_EXPOSE: {  // for ShowImage
+        case XCB_EXPOSE: {  // for showImage
              xcb_expose_event_t& e = *(xcb_expose_event_t*)x_event;
              xcb_copy_area(xcb_connection,pixmap,xcb_window,gc,e.x,e.y,e.x,e.y,e.width,e.height);
              xcb_flush(xcb_connection);
@@ -2219,7 +2219,7 @@ EventType Window_xcb::TranslateEvent(xcb_generic_event_t* x_event) {
     return {EventType::NONE};
 }
 
-EventType Window_xcb::GetEvent(bool wait_for_event) {
+EventType Window_xcb::getEvent(bool wait_for_event) {
 #ifdef ENABLE_GAMEPAD
     ReadGamepadEvents();
 #endif
@@ -2237,7 +2237,7 @@ EventType Window_xcb::GetEvent(bool wait_for_event) {
     return {EventType::NONE};
 }
 
-float Window_xcb::GetDisplayScale() {
+float Window_xcb::getDisplayScale() {
     float dpi = 0.f;
     XrmValue value;
     char *type = NULL;
@@ -2258,7 +2258,7 @@ float Window_xcb::GetDisplayScale() {
 }
 
 #ifdef ENABLE_SHOWIMAGE
-void Window_xcb::ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {  // Shows image for 1 frame.
+void Window_xcb::showImage(uint32_t* buf, uint32_t width, uint32_t height) {  // Shows image for 1 frame.
     xcb_connection_t* c = xcb_connection;
     xcb_image_format_t format = XCB_IMAGE_FORMAT_Z_PIXMAP;
     int depth  = xcb_screen->root_depth;
@@ -2278,14 +2278,14 @@ void Window_xcb::ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {  //
 #endif
 
 
-void Window_xcb::SetCursor(eCursor id) {
+void Window_xcb::setCursor(eCursor id) {
 #ifdef ENABLE_CURSOR
     xcb_change_window_attributes(xcb_connection, xcb_window, XCB_CW_CURSOR, &cursors[id]);
 #endif
 }
 
 #ifdef ENABLE_FULLSCREEN
-void Window_xcb::SetFullscreen(bool enable) {
+void Window_xcb::setFullscreen(bool enable) {
     xcb_atom_t a_wm_state = GetAtom("_NET_WM_STATE");
     xcb_atom_t a_fullscreen = GetAtom("_NET_WM_STATE_FULLSCREEN");
 
@@ -2309,7 +2309,7 @@ void Window_xcb::SetFullscreen(bool enable) {
     xcb_flush(xcb_connection);
 }
 
-bool Window_xcb::IsFullscreen() {
+bool Window_xcb::isFullscreen() {
     xcb_atom_t net_wm_state = GetAtom("_NET_WM_STATE");
     xcb_atom_t fs_atom = GetAtom("_NET_WM_STATE_FULLSCREEN");
 
@@ -2423,22 +2423,22 @@ bool Window_xcb::ConnectGamepad(const char* path) {
                     //printf("Gamepad %d found: %s at %s\n", i, ev.name, path);
                     MapGamepad(i);           // Detect gamepad button layout
                     SetGamepadLEDs(i,1<<i);  // Set Gamepad LEDs to indicate which slot its in.
-                    eventFIFO.push(GPadConnect(i, true));
+                    eventFIFO.push(gpadConnect(i, true));
                     return true;
                 }
             }
-        } else {libevdev_free(dev); close(fd);}
-    } else close(fd);
+        } else {libevdev_free(dev); ::close(fd);}
+    } else ::close(fd);
     return false;
 }
 
 void Window_xcb::DisconnectGamepad(uint8_t id) {
     Evdev& ev = evdev[id];
     if(ev.fd==-1) return;
-    eventFIFO.push(GPadConnect(id, false));
+    eventFIFO.push(gpadConnect(id, false));
     //SetGamepadLEDs(id, 0);  // Does not restore blinking :(
     libevdev_free(ev.dev);
-    close(ev.fd);
+    ::close(ev.fd);
     memset(&ev, 0, sizeof(ev));
     ev.fd = -1;
     ev.dev = 0;
@@ -2604,8 +2604,8 @@ void Window_xcb::GamepadBtnEvent(uint8_t id, input_event event) {
     //printf("keycode=%d (0x%3x) %d\n", keycode, keycode, event.value);
     if(event.value>1) return;  // ignore repeats (0=up 1=down 2=repeat)
     for(auto& b : ev.b) if(keycode==b.BTN) {
-        if(b.eBTN>0) eventFIFO.push(GPadButton(id, b.eBTN, event.value));
-        if(b.eBTN<0) eventFIFO.push(GPadAxis  (id,-b.eBTN, event.value));
+        if(b.eBTN>0) eventFIFO.push(gpadButton(id, b.eBTN, event.value));
+        if(b.eBTN<0) eventFIFO.push(gpadAxis  (id,-b.eBTN, event.value));
     }
 }
 
@@ -2620,10 +2620,10 @@ void Window_xcb::GamepadAxisEvent(uint8_t id, input_event event) {
     };
 
     auto Hat = [&](int val, int btnNeg, int btnPos) { // convert hat axis values to button events
-        if((val!=-1) && ( pad.buttons[btnNeg])) eventFIFO.push(GPadButton(id, btnNeg, 0));
-        if((val!= 1) && ( pad.buttons[btnPos])) eventFIFO.push(GPadButton(id, btnPos, 0));
-        if((val==-1) && (!pad.buttons[btnNeg])) eventFIFO.push(GPadButton(id, btnNeg, 1));
-        if((val== 1) && (!pad.buttons[btnPos])) eventFIFO.push(GPadButton(id, btnPos, 1));
+        if((val!=-1) && ( pad.buttons[btnNeg])) eventFIFO.push(gpadButton(id, btnNeg, 0));
+        if((val!= 1) && ( pad.buttons[btnPos])) eventFIFO.push(gpadButton(id, btnPos, 0));
+        if((val==-1) && (!pad.buttons[btnNeg])) eventFIFO.push(gpadButton(id, btnNeg, 1));
+        if((val== 1) && (!pad.buttons[btnPos])) eventFIFO.push(gpadButton(id, btnPos, 1));
     };
 
     auto isFuzz = [](int value, auto& a) -> bool { // detect fuzz events
@@ -2663,7 +2663,7 @@ void Window_xcb::GamepadAxisEvent(uint8_t id, input_event event) {
     if(pad.axes[a.eAXIS] == fval) return;  // deadzone
     if(a.eAXIS==eAXIS_LY || a.eAXIS==eAXIS_RY) fval=-fval; // flip y axis
     if(a.flip) fval=-fval;
-    eventFIFO.push(GPadAxis(id, a.eAXIS, fval));
+    eventFIFO.push(gpadAxis(id, a.eAXIS, fval));
 }
 
 /*
@@ -2710,14 +2710,14 @@ void Window_xcb::SetGamepadRumble(int index, uint16_t weak, uint16_t strong) {  
     }
 
 
-    const char* Window_xcb::GetClipboardText() {
+    const char* Window_xcb::getClipboardText() {
         RequestClipboard();  // triggers XCB_SELECTION_NOTIFY event
         xcb_generic_event_t* event = xcb_wait_for_event(xcb_connection);
         TranslateEvent(event);
         return clipboard.c_str();
     }
 
-    void Window_xcb::SetClipboardText(const char* str) {
+    void Window_xcb::setClipboardText(const char* str) {
         clipboard = str;
         xcb_set_selection_owner(xcb_connection, xcb_window, atom_CLIPBOARD, XCB_CURRENT_TIME);
         xcb_flush(xcb_connection);
@@ -3339,7 +3339,7 @@ const unsigned char ANDROID_TO_HID[256] = {
 //==========================Android=============================
 
 //------------------------ JNI Wrappers ------------------------
-static void ShowKeyboard(bool visible, int flags=0) {
+static void showKeyboard(bool visible, int flags=0) {
     JInputMethodManager InputMethod;
     JWindow window;
     JView decorView = window.getDecorView();
@@ -3448,9 +3448,9 @@ class Window_android : public WindowBase {
     //-----------------
 
   public:
-    void SetTitle(const char* title){};  // TODO : Set window title?
-    void SetPosition(uint x, uint y){};
-    void SetSize(uint w, uint h){};
+    void setTitle(const char* title){};  // TODO : Set window title?
+    void setPosition(uint x, uint y){};
+    void setSize(uint w, uint h){};
 
   private:
     void Create(const char* title="", uint width=640, uint height=480) {
@@ -3472,7 +3472,7 @@ class Window_android : public WindowBase {
                 if (cmd == APP_CMD_INIT_WINDOW) {
                     shape.width  = (uint16_t)ANativeWindow_getWidth (app->window);
                     shape.height = (uint16_t)ANativeWindow_getHeight(app->window);
-                    eventFIFO.push(ResizeEvent(shape.width, shape.height));        // post window-resize event
+                    eventFIFO.push(resizeEvent(shape.width, shape.height));        // post window-resize event
 /*
                     //Get device configuration for dp scaling
                     AConfiguration* config = AConfiguration_new();
@@ -3482,7 +3482,7 @@ class Window_android : public WindowBase {
                     AConfiguration_delete(config);
 */
                 }
-                if (cmd == APP_CMD_GAINED_FOCUS) eventFIFO.push(FocusEvent(true)); // post focus-event
+                if (cmd == APP_CMD_GAINED_FOCUS) eventFIFO.push(focusEvent(true)); // post focus-event
                 android_app_post_exec_cmd(app, cmd);
             }
         }
@@ -3512,7 +3512,7 @@ class Window_android : public WindowBase {
                 auto& pad = gpads[i];
                 pad.deviceID = deviceID;
                 MapGamepad(i);
-                eventFIFO.push(GPadConnect(i, true));
+                eventFIFO.push(gpadConnect(i, true));
                 return i;
             }
         return -1;
@@ -3616,7 +3616,7 @@ class Window_android : public WindowBase {
             int32_t id = gpads[i].deviceID;
             if(id) if (std::find(list.begin(), list.end(), id) == list.end()) {
                 gpads[i] = GPadSlots{};  // clear gamepad slot
-                eventFIFO.push(GPadConnect(i,false));
+                eventFIFO.push(gpadConnect(i,false));
             }
         }
         // Check for new connects
@@ -3641,8 +3641,8 @@ class Window_android : public WindowBase {
             //printf("keycode:%d (0x%02x) %d\n",keycode,keycode, down);
             auto& pad = gpads[id];
             int8_t eBTN = pad.eBtn(keycode);                        // keycode to eBTN
-            if(eBTN>0) eventFIFO.push(GPadButton(id, eBTN, down));  // is button:  eBTN event
-            if(eBTN<0) eventFIFO.push(GPadAxis  (id,-eBTN, down));  // is trigger: aAXIS event
+            if(eBTN>0) eventFIFO.push(gpadButton(id, eBTN, down));  // is button:  eBTN event
+            if(eBTN<0) eventFIFO.push(gpadAxis  (id,-eBTN, down));  // is trigger: aAXIS event
         }
         return eventFIFO.pop();
     }
@@ -3684,7 +3684,7 @@ class Window_android : public WindowBase {
             calibrate(val, a);                                                 // adjust min/max
             val = flatzone(val, a);                                            // apply deadzone
             if(isFuzz(val, a)) return;                                         // skip if value has not changed
-            eventFIFO.push(GPadAxis(id, eAxis, val));                          // push event
+            eventFIFO.push(gpadAxis(id, eAxis, val));                          // push event
         };
 
         axisEvent(eAXIS_LX);  // left thumb
@@ -3698,10 +3698,10 @@ class Window_android : public WindowBase {
         //---HAT---
         Gamepad& pad = gamepad[id];
         auto Hat = [&](int val, int btnNeg, int btnPos) { // convert hat axis values to button events
-            if((val!=-1) && ( pad.buttons[btnNeg])) eventFIFO.push(GPadButton(id, btnNeg, 0));
-            if((val!= 1) && ( pad.buttons[btnPos])) eventFIFO.push(GPadButton(id, btnPos, 0));
-            if((val==-1) && (!pad.buttons[btnNeg])) eventFIFO.push(GPadButton(id, btnNeg, 1));
-            if((val== 1) && (!pad.buttons[btnPos])) eventFIFO.push(GPadButton(id, btnPos, 1));
+            if((val!=-1) && ( pad.buttons[btnNeg])) eventFIFO.push(gpadButton(id, btnNeg, 0));
+            if((val!= 1) && ( pad.buttons[btnPos])) eventFIFO.push(gpadButton(id, btnPos, 0));
+            if((val==-1) && (!pad.buttons[btnNeg])) eventFIFO.push(gpadButton(id, btnNeg, 1));
+            if((val== 1) && (!pad.buttons[btnPos])) eventFIFO.push(gpadButton(id, btnPos, 1));
         };
 
         auto hatVal = [&](int8_t eAxis) -> float {
@@ -3741,17 +3741,17 @@ class Window_android : public WindowBase {
                 if(unicode) {
                     std::string utf8text = UnicodeToUTF8(unicode);
                     memcpy(buf, utf8text.c_str(), 4);  // copy to static buf so it doesn't go out of scope
-                    eventFIFO.push(TextEvent(buf));    // text typed event  (store in FIFO for next run)
+                    eventFIFO.push(textEvent(buf));    // text typed event  (store in FIFO for next run)
                 }
-                return KeyEvent(eDOWN, hidcode);       // key pressed event (returned on this run)
+                return keyEvent(eDOWN, hidcode);       // key pressed event (returned on this run)
             }
             case AKEY_EVENT_ACTION_UP: {
-                return KeyEvent(eUP, hidcode); // key released event
+                return keyEvent(eUP, hidcode); // key released event
             }
             case AKEY_EVENT_ACTION_MULTIPLE: {
                 // TODO: Implement IME and auto-correct string input,
                 //  (When google fixes the getCharacters bug.)
-                //return TextEvent("IME/AutoCorrect not supported");
+                //return textEvent("IME/AutoCorrect not supported");
             }
         }
         return {};
@@ -3789,7 +3789,7 @@ class Window_android : public WindowBase {
         }
         //-------------------------Emulate mouse from touch events--------------------------
         // if(event.tag==EventType::TOUCH && event.touch.id==0){  //if one-finger touch
-        //     eventFIFO.push(MouseEvent(event.touch.action, event.touch.x, event.touch.y, 1));
+        //     eventFIFO.push(mouseEvent(event.touch.action, event.touch.x, event.touch.y, 1));
         // }
         //----------------------------------------------------------------------------------
 #endif // ENABLE_MULTITOUCH
@@ -3809,7 +3809,7 @@ class Window_android : public WindowBase {
 
         // Get button state (bitmask: 0x1 = left, 0x2 = right, 0x4 = middle)
         int32_t buttons = AMotionEvent_getButtonState(a_event);
-        uint8_t bestBtn = GetBtnState(1) ? 1 : GetBtnState(2) ? 2 : GetBtnState(3) ? 3 : 0;
+        uint8_t bestBtn = getBtnState(1) ? 1 : getBtnState(2) ? 2 : getBtnState(3) ? 3 : 0;
 
         uint8_t btn = 0;  // get button that changed
         if(mouse.btn[3] != (buttons & AMOTION_EVENT_BUTTON_SECONDARY)) btn = 3;
@@ -3817,14 +3817,14 @@ class Window_android : public WindowBase {
         if(mouse.btn[1] != (buttons & AMOTION_EVENT_BUTTON_PRIMARY)) btn = 1;
 
         switch (action) {
-            case AMOTION_EVENT_ACTION_BUTTON_PRESS   : event = MouseEvent(eDOWN, x, y, btn);     break;
-            case AMOTION_EVENT_ACTION_MOVE           : event = MouseEvent(eMOVE, x, y, bestBtn); break;
-            case AMOTION_EVENT_ACTION_HOVER_MOVE     : event = MouseEvent(eMOVE, x, y, 0  );     break;
-            case AMOTION_EVENT_ACTION_BUTTON_RELEASE : event = MouseEvent(eUP,   x, y, btn);     break;
+            case AMOTION_EVENT_ACTION_BUTTON_PRESS   : event = mouseEvent(eDOWN, x, y, btn);     break;
+            case AMOTION_EVENT_ACTION_MOVE           : event = mouseEvent(eMOVE, x, y, bestBtn); break;
+            case AMOTION_EVENT_ACTION_HOVER_MOVE     : event = mouseEvent(eMOVE, x, y, 0  );     break;
+            case AMOTION_EVENT_ACTION_BUTTON_RELEASE : event = mouseEvent(eUP,   x, y, btn);     break;
             case AMOTION_EVENT_ACTION_SCROLL: {
                 float vscroll = AMotionEvent_getAxisValue(a_event, AMOTION_EVENT_AXIS_VSCROLL, 0);
                 uint8_t wheel = (vscroll > 0) ? 4 : 5;
-                event = MouseEvent(eDOWN, x, y, wheel);
+                event = mouseEvent(eDOWN, x, y, wheel);
                 break;
             }
             default: break;
@@ -3833,7 +3833,7 @@ class Window_android : public WindowBase {
     }
     //--------------------------------------------------
     //--------------- Main event handler ---------------
-    EventType GetEvent(bool wait_for_event = false) {
+    EventType getEvent(bool wait_for_event = false) {
         EventType event = {};
         if (!eventFIFO.isEmpty()) return eventFIFO.pop();  // pop message from message queue buffer
 
@@ -3851,8 +3851,8 @@ class Window_android : public WindowBase {
             android_app_pre_exec_cmd(app, cmd);
             if (app->onAppCmd != nullptr) app->onAppCmd(app, cmd);
             switch (cmd) {
-                case APP_CMD_GAINED_FOCUS: event = FocusEvent(true);  break;
-                case APP_CMD_LOST_FOCUS  : event = FocusEvent(false); break;
+                case APP_CMD_GAINED_FOCUS: event = focusEvent(true);  break;
+                case APP_CMD_LOST_FOCUS  : event = focusEvent(false); break;
                 default: break;
             }
             android_app_post_exec_cmd(app, cmd);
@@ -3895,20 +3895,20 @@ class Window_android : public WindowBase {
         }  // else if (id == LOOPER_ID_USER) { printf("LOOPER_ID_USER\n");}
 
         MonitorGamepads();
-        if (app->destroyRequested) return CloseEvent();  // Check if we are exiting.
+        if (app->destroyRequested) return closeEvent();  // Check if we are exiting.
         return {};
     };
     //--------------------------------------------------
 
     //--Show / Hide keyboard--
-    void ShowKeyboard(bool enabled) {
-        ::ShowKeyboard(enabled);
+    void showKeyboard(bool enabled) {
+        ::showKeyboard(enabled);
         //LOGI("%s keyboard", enabled ? "Show" : "Hide");
     }
 
-    virtual const void* GetNativeHandle() const {return app->window;};
+    virtual const void* getNativeHandle() const {return app->window;};
 
-    float GetDisplayScale() {
+    float getDisplayScale() {
         //Get device configuration for dp scaling
         AConfiguration* config = AConfiguration_new();
         AConfiguration_fromAssetManager(config, app->activity->assetManager);
@@ -3920,11 +3920,11 @@ class Window_android : public WindowBase {
     }
 
 #ifdef ENABLE_SHOWIMAGE
-    virtual void ShowImage(uint32_t* buf, uint32_t width, uint32_t height) {
+    virtual void showImage(uint32_t* buf, uint32_t width, uint32_t height) {
         auto& wnd = app->window;
         int w = ANativeWindow_getWidth(wnd);
         int h = ANativeWindow_getHeight(wnd);
-        //int s = GetScale();
+        //int s = getScale();
         int s = 1.0;
         //printf("w=%d h=%d  w2=%d h2=%d\n", w,h, width, height);
 
@@ -3953,7 +3953,7 @@ class Window_android : public WindowBase {
 #endif
 #ifdef ENABLE_CLIPBOARD
 #define EXIT_IF_NULL(var) if(!var) return nullptr;
-    const char* GetClipboardText() {
+    const char* getClipboardText() {
         JClipboardManager clipman;
         JClipData clip = clipman.getPrimaryClip();   EXIT_IF_NULL(clip.obj)
         JClipDataItem item = clip.getItemAt(0);      EXIT_IF_NULL(item.obj)
@@ -3962,7 +3962,7 @@ class Window_android : public WindowBase {
         return clipboard.c_str();
     }
 
-    void SetClipboardText(const char* str) {
+    void setClipboardText(const char* str) {
         JClipboardManager clipman;
         JString label("");
         JString text(str);
@@ -3990,10 +3990,10 @@ class Window_android : public WindowBase {
 *  It provides functions for querying the current state of the window, keyboard,
 *  and mouse. Also, events may be processed via either polling or callbacks.
 *
-*  For polling, use the "GetEvent" function to return one event at a time,
-*  and process, using a case statement.  For an example, see the "ProcessEvents" implementation.
+*  For polling, use the "getEvent" function to return one event at a time,
+*  and process, using a case statement.  For an example, see the "processEvents" implementation.
 *
-*  For callbacks, use the "ProcessEvents" function to dispatch all queued events to their
+*  For callbacks, use the "processEvents" function to dispatch all queued events to their
 *  appropriate event handlers.  To create event handlers, derive your class from Window,
 *  and override the virtual event handler functions. (See WindowBase.h)
 *
@@ -4035,27 +4035,27 @@ class Window_android : public WindowBase {
 
 
 //--Events--
-EventType WindowBase::MouseEvent(eAction action, int16_t x, int16_t y, uint8_t btn) {
+EventType WindowBase::mouseEvent(eAction action, int16_t x, int16_t y, uint8_t btn) {
     mouse.pos = {x, y};
     if (action != eMOVE) mouse.btn[btn] = (action == eDOWN);  // Keep track of button state
     EventType e = {EventType::MOUSE, {action, x, y, btn}};
     return e;
 }
 
-EventType WindowBase::KeyEvent(eAction action, uint8_t key) {
+EventType WindowBase::keyEvent(eAction action, uint8_t key) {
     keystate[key] = (action == eDOWN);
     EventType e   = {EventType::KEY};
     e.key         = {action, (eKeycode)key};
     return e;
 }
 
-EventType WindowBase::TextEvent(const char* str) {
+EventType WindowBase::textEvent(const char* str) {
     EventType e = {EventType::TEXT};
     e.text.str  = str;
     return e;
 }
 
-EventType WindowBase::MoveEvent(int16_t x, int16_t y) {
+EventType WindowBase::moveEvent(int16_t x, int16_t y) {
     shape.x     = x;
     shape.y     = y;
     EventType e = {EventType::MOVE};
@@ -4063,11 +4063,11 @@ EventType WindowBase::MoveEvent(int16_t x, int16_t y) {
     return e;
 }
 
-EventType WindowBase::ResizeEvent(uint16_t width, uint16_t height) {
-    this->resized = true;
+EventType WindowBase::resizeEvent(uint16_t width, uint16_t height) {
+    this->is_resized = true;
     shape.width  = width;
     shape.height = height;
-    //float scale = GetScale();
+    //float scale = getScale();
     EventType e  = {EventType::RESIZE};
     e.resize     = {width, height};
     //e.resize.width = width / scale;
@@ -4075,14 +4075,14 @@ EventType WindowBase::ResizeEvent(uint16_t width, uint16_t height) {
     return e;
 }
 
-EventType WindowBase::FocusEvent(bool has_focus) {
+EventType WindowBase::focusEvent(bool has_focus) {
     this->has_focus   = has_focus;
     EventType e       = {EventType::FOCUS};
     e.focus.has_focus = has_focus;
     return e;
 }
 
-EventType WindowBase::GPadConnect(uint8_t pad, bool active) {
+EventType WindowBase::gpadConnect(uint8_t pad, bool active) {
     gamepad[pad].active = active;
     EventType e = {EventType::GPAD_CONNECT};
     e.gp_connect.pad = pad;
@@ -4090,7 +4090,7 @@ EventType WindowBase::GPadConnect(uint8_t pad, bool active) {
     return e;
 }
 
-EventType WindowBase::GPadButton(uint8_t pad, uint8_t btn, bool down) {
+EventType WindowBase::gpadButton(uint8_t pad, uint8_t btn, bool down) {
     gamepad[pad].buttons[btn] = down;
     EventType e = {EventType::GPAD_BUTTON};
     e.gp_button.pad = pad;
@@ -4099,7 +4099,7 @@ EventType WindowBase::GPadButton(uint8_t pad, uint8_t btn, bool down) {
     return e;
 }
 
-EventType WindowBase::GPadAxis(uint8_t pad, uint8_t axis, float val) {
+EventType WindowBase::gpadAxis(uint8_t pad, uint8_t axis, float val) {
     gamepad[pad].axes[axis] = val;
     EventType e = {EventType::GPAD_AXIS};
     e.gp_axis.pad  = pad;
@@ -4108,35 +4108,35 @@ EventType WindowBase::GPadAxis(uint8_t pad, uint8_t axis, float val) {
     return e;
 }
 
-EventType WindowBase::CloseEvent() {
+EventType WindowBase::closeEvent() {
     running = false;
     return {EventType::CLOSE};
 }
 //----------
 
-bool WindowBase::ProcessEvents(bool wait_for_event) {
-    EventType e = GetEvent(wait_for_event);
+bool WindowBase::processEvents(bool wait_for_event) {
+    EventType e = getEvent(wait_for_event);
     while (e.tag != EventType::NONE) {
-        running = ProcessEvent(e);  // Call event handlers
+        running = processEvent(e);  // Call event handlers
         if(!running) return false;
-        e = GetEvent();
+        e = getEvent();
     }
     return running;
 }
 
-bool WindowBase::ProcessEvent(EventType e) {
+bool WindowBase::processEvent(EventType e) {
     switch (e.tag) {
-       case EventType::MOUSE       : OnMouseEvent (e.mouse.action, e.mouse.x, e.mouse.y, e.mouse.btn);  break;
-       case EventType::KEY         : OnKeyEvent   (e.key.action, e.key.keycode);                        break;
-       case EventType::TEXT        : OnTextEvent  (e.text.str);                                         break;
-       case EventType::MOVE        : OnMoveEvent  (e.move.x, e.move.y);                                 break;
-       case EventType::RESIZE      : OnResizeEvent(e.resize.width, e.resize.height);                    break;
-       case EventType::FOCUS       : OnFocusEvent (e.focus.has_focus);                                  break;
-       case EventType::TOUCH       : OnTouchEvent (e.touch.action, e.touch.x, e.touch.y, e.touch.id);   break;
-       case EventType::GPAD_CONNECT: OnGPadConnect(e.gp_connect.pad, e.gp_connect.active);              break;
-       case EventType::GPAD_BUTTON : OnGPadButton (e.gp_button.pad, e.gp_button.btn, e.gp_button.down); break;
-       case EventType::GPAD_AXIS   : OnGPadAxis   (e.gp_axis.pad, e.gp_axis.axis, e.gp_axis.val);       break;
-       case EventType::CLOSE       : OnCloseEvent (); return false;
+       case EventType::MOUSE       : onMouseEvent (e.mouse.action, e.mouse.x, e.mouse.y, e.mouse.btn);  break;
+       case EventType::KEY         : onKeyEvent   (e.key.action, e.key.keycode);                        break;
+       case EventType::TEXT        : onTextEvent  (e.text.str);                                         break;
+       case EventType::MOVE        : onMoveEvent  (e.move.x, e.move.y);                                 break;
+       case EventType::RESIZE      : onResizeEvent(e.resize.width, e.resize.height);                    break;
+       case EventType::FOCUS       : onFocusEvent (e.focus.has_focus);                                  break;
+       case EventType::TOUCH       : onTouchEvent (e.touch.action, e.touch.x, e.touch.y, e.touch.id);   break;
+       case EventType::GPAD_CONNECT: onGpadConnect(e.gp_connect.pad, e.gp_connect.active);              break;
+       case EventType::GPAD_BUTTON : onGpadButton (e.gp_button.pad, e.gp_button.btn, e.gp_button.down); break;
+       case EventType::GPAD_AXIS   : onGpadAxis   (e.gp_axis.pad, e.gp_axis.axis, e.gp_axis.val);       break;
+       case EventType::CLOSE       : onCloseEvent (); return false;
        default: break;
     }
     return true;
