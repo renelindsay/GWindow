@@ -20,6 +20,7 @@ class MainWindow : public GWindow {  // Without Vulkan
     void onGPadButton (uint8_t pad, uint8_t btn, bool down){printf("Gamepad %d button %d %s\n", pad, btn, down?"down":"up");}
     void onGPadAxis   (uint8_t pad, uint8_t axis, float val){printf("Gamepad %d axis %d : %.2f\n", pad, axis, val);}
     void onCloseEvent () { printf("Window Closing.\n"); }
+    void onFrameEvent () { static int i; printf("%c\r", "|/-\\"[i++/64%4]); } // spinner
 };
 
 int main(int argc, char *argv[]) {
@@ -60,12 +61,11 @@ int main(int argc, char *argv[]) {
         bool key_pressed = window.getKeyState(eKEY_LeftShift);
         if (key_pressed) printf("LEFT SHIFT PRESSED\r");
 
-        // Draw square image
-        for(int y=0;y<256;++y) for(int x=0;x<256;++x) {
-            uint32_t* pix = &image[x + y*256];
-            *pix = (x<<16) + (y<<8) + (rand()&255);
-        }
-        if (!key_pressed) window.showImage(image,256,256);
+        // Generate a test image
+        for (int y=0; y<256; ++y)
+            for (int x=0; x<256; ++x)
+                image[x + y*256] = (x<<16) + (y<<8) + (rand()%255);
+        window.showImage(image, 256, 256);
 
         // test fullscreen mode (Desktop only)
         if(window.getKeyState(eKEY_1)) window.setFullscreen(true);

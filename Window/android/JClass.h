@@ -67,7 +67,8 @@ inline int printf(const char* format, ...) {  // printf for Android
     va_end(argptr);
     printBuf += buf;
     size_t len = strlen(buf);
-    if ((len >= printBuf.SIZE - 1) || (buf[len - 1] == '\n')) printBuf.flush();  // flush on
+    if ((len >= printBuf.SIZE - 1) || (buf[len - 1] == '\n')) printBuf.flush();  // flush
+    if (buf[len - 1] == '\r') printBuf.clear();
     return strlen(buf);
 }
 //--------------------------------------------------------------------------------------------------

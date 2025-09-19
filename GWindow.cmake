@@ -2,7 +2,7 @@
 #
 # Usage:
 #   add_executable(myapp main.cpp)
-#   include("path/to/gwindow.cmake")
+#   include("path/to/GWindow.cmake")
 #   add_gwindow(myapp)
 
 function(add_gwindow target)

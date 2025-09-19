@@ -175,7 +175,7 @@ protected:
     bool processEvent (EventType e);                              // Dispatch/inject the given event to event handlers.
     bool pollEvents() { return processEvents(false); }            // Run continuously
     bool waitEvents() { return processEvents(true ); }            // Pause app when there are no events to process
-    // void Run(){ while(processEvents()){} }                     // Run message loop until window is closed.
+    void Run(bool wait=true){ while(processEvents(wait)){} }      // Run message loop until window is closed.
 
     //-- Virtual Functions as event handlers --
     virtual void onMouseEvent(eAction action, int16_t x, int16_t y, uint8_t btn) {}  // Callback for mouse events
@@ -185,10 +185,12 @@ protected:
     virtual void onResizeEvent(uint16_t width, uint16_t height) {}                   // Callback for window resize events
     virtual void onFocusEvent(bool hasFocus) {}                                      // Callback for window gain/lose focus events
     virtual void onTouchEvent(eAction action, float x, float y, uint8_t id) {}       // Callback for Multi-touch events
-    virtual void onGpadConnect(uint8_t pad, bool active){}                           // Callback for Joystick connect/disconnect
-    virtual void onGpadButton(uint8_t pad, uint8_t btn, bool down){}                 // Callback for Joystick button events
-    virtual void onGpadAxis(uint8_t pad, uint8_t axis, float val){}                  // Callback for Joystick axis events
+    virtual void onGpadConnect(uint8_t pad, bool active) {}                          // Callback for Joystick connect/disconnect
+    virtual void onGpadButton(uint8_t pad, uint8_t btn, bool down) {}                // Callback for Joystick button events
+    virtual void onGpadAxis(uint8_t pad, uint8_t axis, float val) {}                 // Callback for Joystick axis events
     virtual void onCloseEvent() {}                                                   // Callback for window closing event
+    virtual void onFrameEvent() {}                                                   // Callback for new frame event
+    //virtual void onIdleEvent() {}                                                    // Callback when idle
 };
 //==============================================================
 

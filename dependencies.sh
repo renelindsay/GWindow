@@ -2,8 +2,8 @@
 
 # This script downloads dependencies for building GWindow on Ubuntu 24.04.
 # Most runtime dependencies are already included in a fresh install of Linux,
-# except for libxcb-cursor0, for hover mouse pointers (charet/hand/hourglass..).
-# Either install it, or remove "ENABLE_CURSOR" from config.h, to disable it.
+# except for libxcb-cursor0 for mouse cursors, and libxcb-icccm4 for clipboard support.
+# Either install them, or disable those features in config.h.
 
 sudo apt install build-essential ninja-build          # C++ compiler
 sudo apt install libx11-xcb-dev                       # X11/XCB

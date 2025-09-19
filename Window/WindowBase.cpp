@@ -89,11 +89,13 @@ EventType WindowBase::closeEvent() {
 
 bool WindowBase::processEvents(bool wait_for_event) {
     EventType e = getEvent(wait_for_event);
+    //if(e.tag == EventType::NONE) onIdleEvent();
     while (e.tag != EventType::NONE) {
         running = processEvent(e);  // Call event handlers
         if(!running) return false;
         e = getEvent();
     }
+    onFrameEvent();
     return running;
 }
 

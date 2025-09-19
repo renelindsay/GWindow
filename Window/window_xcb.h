@@ -171,7 +171,7 @@ class Window_xcb : public WindowBase {
     //------------------
 
     bool InitTouch();                                        // Returns false if no touch-device was found.
-    EventType TranslateEvent(xcb_generic_event_t* x_event);  // Convert x_event to WSIWindow event
+    EventType TranslateEvent(xcb_generic_event_t* x_event);  // Convert x_event to Window event
     void Create(const char* title="Window", uint width=640, uint height=480);
     xcb_atom_t GetAtom(const char* name, bool only_if_exists = false);
 
