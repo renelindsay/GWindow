@@ -95,23 +95,23 @@ bool WindowBase::processEvents(bool wait_for_event) {
         if(!running) return false;
         e = getEvent();
     }
-    onFrameEvent();
+    onFrame();
     return running;
 }
 
 bool WindowBase::processEvent(EventType e) {
     switch (e.tag) {
-       case EventType::MOUSE       : onMouseEvent (e.mouse.action, e.mouse.x, e.mouse.y, e.mouse.btn);  break;
-       case EventType::KEY         : onKeyEvent   (e.key.action, e.key.keycode);                        break;
-       case EventType::TEXT        : onTextEvent  (e.text.str);                                         break;
-       case EventType::MOVE        : onMoveEvent  (e.move.x, e.move.y);                                 break;
-       case EventType::RESIZE      : onResizeEvent(e.resize.width, e.resize.height);                    break;
-       case EventType::FOCUS       : onFocusEvent (e.focus.has_focus);                                  break;
-       case EventType::TOUCH       : onTouchEvent (e.touch.action, e.touch.x, e.touch.y, e.touch.id);   break;
+       case EventType::MOUSE       : onMouse      (e.mouse.action, e.mouse.x, e.mouse.y, e.mouse.btn);  break;
+       case EventType::KEY         : onKey        (e.key.action, e.key.keycode);                        break;
+       case EventType::TEXT        : onText       (e.text.str);                                         break;
+       case EventType::MOVE        : onMove       (e.move.x, e.move.y);                                 break;
+       case EventType::RESIZE      : onResize     (e.resize.width, e.resize.height);                    break;
+       case EventType::FOCUS       : onFocus      (e.focus.has_focus);                                  break;
+       case EventType::TOUCH       : onTouch      (e.touch.action, e.touch.x, e.touch.y, e.touch.id);   break;
        case EventType::GPAD_CONNECT: onGpadConnect(e.gp_connect.pad, e.gp_connect.active);              break;
        case EventType::GPAD_BUTTON : onGpadButton (e.gp_button.pad, e.gp_button.btn, e.gp_button.down); break;
        case EventType::GPAD_AXIS   : onGpadAxis   (e.gp_axis.pad, e.gp_axis.axis, e.gp_axis.val);       break;
-       case EventType::CLOSE       : onCloseEvent (); return false;
+       case EventType::CLOSE       : onClose      (); return false;
        default: break;
     }
     return true;

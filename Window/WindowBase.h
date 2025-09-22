@@ -178,19 +178,19 @@ protected:
     void Run(bool wait=true){ while(processEvents(wait)){} }      // Run message loop until window is closed.
 
     //-- Virtual Functions as event handlers --
-    virtual void onMouseEvent(eAction action, int16_t x, int16_t y, uint8_t btn) {}  // Callback for mouse events
-    virtual void onKeyEvent(eAction action, eKeycode keycode) {}                     // Callback for keyboard events (keycodes)
-    virtual void onTextEvent(const char *str) {}                                     // Callback for text typed events (text)
-    virtual void onMoveEvent(int16_t x, int16_t y) {}                                // Callback for window move events
-    virtual void onResizeEvent(uint16_t width, uint16_t height) {}                   // Callback for window resize events
-    virtual void onFocusEvent(bool hasFocus) {}                                      // Callback for window gain/lose focus events
-    virtual void onTouchEvent(eAction action, float x, float y, uint8_t id) {}       // Callback for Multi-touch events
-    virtual void onGpadConnect(uint8_t pad, bool active) {}                          // Callback for Joystick connect/disconnect
-    virtual void onGpadButton(uint8_t pad, uint8_t btn, bool down) {}                // Callback for Joystick button events
-    virtual void onGpadAxis(uint8_t pad, uint8_t axis, float val) {}                 // Callback for Joystick axis events
-    virtual void onCloseEvent() {}                                                   // Callback for window closing event
-    virtual void onFrameEvent() {}                                                   // Callback for new frame event
-    //virtual void onIdleEvent() {}                                                    // Callback when idle
+    virtual void onMouse(eAction action, int16_t x, int16_t y, uint8_t btn) {}  // Callback for mouse events
+    virtual void onKey(eAction action, eKeycode keycode) {}                     // Callback for keyboard events (keycodes)
+    virtual void onText(const char *str) {}                                     // Callback for text typed events (text)
+    virtual void onMove(int16_t x, int16_t y) {}                                // Callback for window move events
+    virtual void onResize(uint16_t width, uint16_t height) {}                   // Callback for window resize events
+    virtual void onFocus(bool hasFocus) {}                                      // Callback for window gain/lose focus events
+    virtual void onTouch(eAction action, float x, float y, uint8_t id) {}       // Callback for Multi-touch events
+    virtual void onGpadConnect(uint8_t pad, bool active) {}                     // Callback for Joystick connect/disconnect
+    virtual void onGpadButton(uint8_t pad, uint8_t btn, bool down) {}           // Callback for Joystick button events
+    virtual void onGpadAxis(uint8_t pad, uint8_t axis, float val) {}            // Callback for Joystick axis events
+    virtual void onClose() {}                                                   // Callback for window closing event
+    virtual void onFrame() {}                                                   // Callback for new frame event
+    //virtual void onIdleEvent() {}                                               // Callback when idle
 };
 //==============================================================
 

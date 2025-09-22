@@ -404,20 +404,22 @@ protected:
     bool processEvent (EventType e);                              // Dispatch/inject the given event to event handlers.
     bool pollEvents() { return processEvents(false); }            // Run continuously
     bool waitEvents() { return processEvents(true ); }            // Pause app when there are no events to process
-    // void Run(){ while(processEvents()){} }                     // Run message loop until window is closed.
+    void Run(bool wait=true){ while(processEvents(wait)){} }      // Run message loop until window is closed.
 
     //-- Virtual Functions as event handlers --
-    virtual void onMouseEvent(eAction action, int16_t x, int16_t y, uint8_t btn) {}  // Callback for mouse events
-    virtual void onKeyEvent(eAction action, eKeycode keycode) {}                     // Callback for keyboard events (keycodes)
-    virtual void onTextEvent(const char *str) {}                                     // Callback for text typed events (text)
-    virtual void onMoveEvent(int16_t x, int16_t y) {}                                // Callback for window move events
-    virtual void onResizeEvent(uint16_t width, uint16_t height) {}                   // Callback for window resize events
-    virtual void onFocusEvent(bool hasFocus) {}                                      // Callback for window gain/lose focus events
-    virtual void onTouchEvent(eAction action, float x, float y, uint8_t id) {}       // Callback for Multi-touch events
-    virtual void onGpadConnect(uint8_t pad, bool active){}                           // Callback for Joystick connect/disconnect
-    virtual void onGpadButton(uint8_t pad, uint8_t btn, bool down){}                 // Callback for Joystick button events
-    virtual void onGpadAxis(uint8_t pad, uint8_t axis, float val){}                  // Callback for Joystick axis events
-    virtual void onCloseEvent() {}                                                   // Callback for window closing event
+    virtual void onMouse(eAction action, int16_t x, int16_t y, uint8_t btn) {}  // Callback for mouse events
+    virtual void onKey(eAction action, eKeycode keycode) {}                     // Callback for keyboard events (keycodes)
+    virtual void onText(const char *str) {}                                     // Callback for text typed events (text)
+    virtual void onMove(int16_t x, int16_t y) {}                                // Callback for window move events
+    virtual void onResize(uint16_t width, uint16_t height) {}                   // Callback for window resize events
+    virtual void onFocus(bool hasFocus) {}                                      // Callback for window gain/lose focus events
+    virtual void onTouch(eAction action, float x, float y, uint8_t id) {}       // Callback for Multi-touch events
+    virtual void onGpadConnect(uint8_t pad, bool active) {}                     // Callback for Joystick connect/disconnect
+    virtual void onGpadButton(uint8_t pad, uint8_t btn, bool down) {}           // Callback for Joystick button events
+    virtual void onGpadAxis(uint8_t pad, uint8_t axis, float val) {}            // Callback for Joystick axis events
+    virtual void onClose() {}                                                   // Callback for window closing event
+    virtual void onFrame() {}                                                   // Callback for new frame event
+    //virtual void onIdleEvent() {}                                               // Callback when idle
 };
 //==============================================================
 
@@ -1799,7 +1801,7 @@ class Window_xcb : public WindowBase {
     //------------------
 
     bool InitTouch();                                        // Returns false if no touch-device was found.
-    EventType TranslateEvent(xcb_generic_event_t* x_event);  // Convert x_event to WSIWindow event
+    EventType TranslateEvent(xcb_generic_event_t* x_event);  // Convert x_event to Window event
     void Create(const char* title="Window", uint width=640, uint height=480);
     xcb_atom_t GetAtom(const char* name, bool only_if_exists = false);
 
@@ -2881,7 +2883,8 @@ inline int printf(const char* format, ...) {  // printf for Android
     va_end(argptr);
     printBuf += buf;
     size_t len = strlen(buf);
-    if ((len >= printBuf.SIZE - 1) || (buf[len - 1] == '\n')) printBuf.flush();  // flush on
+    if ((len >= printBuf.SIZE - 1) || (buf[len - 1] == '\n')) printBuf.flush();  // flush
+    if (buf[len - 1] == '\r') printBuf.clear();
     return strlen(buf);
 }
 //--------------------------------------------------------------------------------------------------
@@ -4116,27 +4119,29 @@ EventType WindowBase::closeEvent() {
 
 bool WindowBase::processEvents(bool wait_for_event) {
     EventType e = getEvent(wait_for_event);
+    //if(e.tag == EventType::NONE) onIdleEvent();
     while (e.tag != EventType::NONE) {
         running = processEvent(e);  // Call event handlers
         if(!running) return false;
         e = getEvent();
     }
+    onFrame();
     return running;
 }
 
 bool WindowBase::processEvent(EventType e) {
     switch (e.tag) {
-       case EventType::MOUSE       : onMouseEvent (e.mouse.action, e.mouse.x, e.mouse.y, e.mouse.btn);  break;
-       case EventType::KEY         : onKeyEvent   (e.key.action, e.key.keycode);                        break;
-       case EventType::TEXT        : onTextEvent  (e.text.str);                                         break;
-       case EventType::MOVE        : onMoveEvent  (e.move.x, e.move.y);                                 break;
-       case EventType::RESIZE      : onResizeEvent(e.resize.width, e.resize.height);                    break;
-       case EventType::FOCUS       : onFocusEvent (e.focus.has_focus);                                  break;
-       case EventType::TOUCH       : onTouchEvent (e.touch.action, e.touch.x, e.touch.y, e.touch.id);   break;
+       case EventType::MOUSE       : onMouse      (e.mouse.action, e.mouse.x, e.mouse.y, e.mouse.btn);  break;
+       case EventType::KEY         : onKey        (e.key.action, e.key.keycode);                        break;
+       case EventType::TEXT        : onText       (e.text.str);                                         break;
+       case EventType::MOVE        : onMove       (e.move.x, e.move.y);                                 break;
+       case EventType::RESIZE      : onResize     (e.resize.width, e.resize.height);                    break;
+       case EventType::FOCUS       : onFocus      (e.focus.has_focus);                                  break;
+       case EventType::TOUCH       : onTouch      (e.touch.action, e.touch.x, e.touch.y, e.touch.id);   break;
        case EventType::GPAD_CONNECT: onGpadConnect(e.gp_connect.pad, e.gp_connect.active);              break;
        case EventType::GPAD_BUTTON : onGpadButton (e.gp_button.pad, e.gp_button.btn, e.gp_button.down); break;
        case EventType::GPAD_AXIS   : onGpadAxis   (e.gp_axis.pad, e.gp_axis.axis, e.gp_axis.val);       break;
-       case EventType::CLOSE       : onCloseEvent (); return false;
+       case EventType::CLOSE       : onClose      (); return false;
        default: break;
     }
     return true;

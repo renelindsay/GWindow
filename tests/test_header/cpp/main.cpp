@@ -10,17 +10,18 @@ const char *type[] {"up  ", "down", "move"};  // Action types for mouse, keyboar
 //-- EVENT HANDLERS --
 //class MainWindow : public vkWindow {  // With Vulkan (requires vkUtils)
 class MainWindow : public GWindow {  // Without Vulkan
-    void onMouseEvent (eAction action, int16_t x, int16_t y, uint8_t btn) { printf("Mouse: %s %d x %d Btn:%d\n", type[action], x, y, btn); }
-    void onTouchEvent (eAction action, float x, float y, uint8_t id) { printf("Touch: %s %.2f x %.2f id:%d\n", type[action], x, y, id); }
-    void onKeyEvent   (eAction action, eKeycode keycode) { printf("Key: %s keycode:%d\n", type[action], keycode); }
-    void onTextEvent  (const char *str) { printf("Text: '%s'\n", str); }
-    void onMoveEvent  (int16_t x, int16_t y) { printf("Window Move: x=%d y=%d\n", x, y); }
-    void onFocusEvent (bool hasFocus) { printf("Focus: %s\n", hasFocus ? "True" : "False"); }
-    void onResizeEvent(uint16_t width, uint16_t height) { printf("Window Resize: width=%4d height=%4d\n", width, height); }
+    void onMouse      (eAction action, int16_t x, int16_t y, uint8_t btn) { printf("Mouse: %s %d x %d Btn:%d\n", type[action], x, y, btn); }
+    void onTouch      (eAction action, float x, float y, uint8_t id) { printf("Touch: %s %.2f x %.2f id:%d\n", type[action], x, y, id); }
+    void onKey        (eAction action, eKeycode keycode) { printf("Key: %s keycode:%d\n", type[action], keycode); }
+    void onText       (const char *str) { printf("Text: '%s'\n", str); }
+    void onMove       (int16_t x, int16_t y) { printf("Window Move: x=%d y=%d\n", x, y); }
+    void onFocus      (bool hasFocus) { printf("Focus: %s\n", hasFocus ? "True" : "False"); }
+    void onResize     (uint16_t width, uint16_t height) { printf("Window Resize: width=%4d height=%4d\n", width, height); }
     void onGPadConnect(uint8_t pad, bool active){ printf("Gamepad %d %s\n", pad, active?"connected":"disconnected"); }
     void onGPadButton (uint8_t pad, uint8_t btn, bool down){printf("Gamepad %d button %d %s\n", pad, btn, down?"down":"up");}
     void onGPadAxis   (uint8_t pad, uint8_t axis, float val){printf("Gamepad %d axis %d : %.2f\n", pad, axis, val);}
-    void onCloseEvent () { printf("Window Closing.\n"); }
+    void onClose      () { printf("Window Closing.\n"); }
+    void onFrame      () { static int i; printf("%c\r", "|/-\\"[i++/64%4]); } // spinner
 };
 
 int main(int argc, char *argv[]) {
@@ -61,12 +62,11 @@ int main(int argc, char *argv[]) {
         bool key_pressed = window.getKeyState(eKEY_LeftShift);
         if (key_pressed) printf("LEFT SHIFT PRESSED\r");
 
-        // Draw square image
-        for(int y=0;y<256;++y) for(int x=0;x<256;++x) {
-            uint32_t* pix = &image[x + y*256];
-            *pix = (x<<16) + (y<<8) + (rand()&255);
-        }
-        if (!key_pressed) window.showImage(image,256,256);
+        // Generate a test image
+        for (int y=0; y<256; ++y)
+            for (int x=0; x<256; ++x)
+                image[x + y*256] = (x<<16) + (y<<8) + (rand()%255);
+        window.showImage(image, 256, 256);
 
         // test fullscreen mode (Desktop only)
         if(window.getKeyState(eKEY_1)) window.setFullscreen(true);

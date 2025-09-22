@@ -102,3 +102,5 @@ Run either `test_header` or `test_lib`.
 - For Vulkan or OpenGL, use `getNativeHandle()` to create the rendering context.
 - Place asset files in `tests/*/assets/`, to include in the Android APK.
 - On desktop, the test apps expect to find `assets/` in the local directory.
+- On Linux, the test app, compiled with MinSizeRel, is 52 KB.
+- On Windows, the test app, compiled with MinSizeRel, is 26 KB.
