@@ -1,1 +1,10 @@
-Todo: Write documentation.
+- Add Wayland support (new platform implementation)
+- Add MacOS support (new platform implementation)
+- Implement timeout when main loop is in blocking mode
+- Fix Android JClass crash when calling GUI thread functions
+- Fix Android on-screen keyboard autocomplete text handling
+- Add support for custom gamepad button layouts
+
+- Update documentation
+- Add FAQ section to docs/ for common user questions
+
