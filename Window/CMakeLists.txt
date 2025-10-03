@@ -74,5 +74,4 @@ endif()
 #===============================ALL===============================
 # Share include directories to apps that use this lib
 target_include_directories(${PROJECT_NAME} PUBLIC .)
-target_compile_definitions(${PROJECT_NAME} PUBLIC GWINDOW_IMPLEMENTATION)
 #=================================================================
