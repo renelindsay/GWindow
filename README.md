@@ -4,6 +4,10 @@
 
 GWindow is designed for **Vulkan**, OpenGL, OpenGL ES or even software rendering.  Distributed as a single-header (stb-style) library, it emphasizes minimal dependencies, fast builds, and tiny binaries.
 
+![platforms.png](./docs/images/small/platforms.png) 
+
+![gwindow_win32_small.png](/home/rene/workspace/GWindow/docs/images/small/gwindow_win32_small.png) ![gwindow_linux_small.png](/home/rene/workspace/GWindow/docs/images/small/gwindow_linux_small.png) ![gwindow_android_small.png](/home/rene/workspace/GWindow/docs/images/small/gwindow_android_small.png)
+
 ---
 
 ## ✨ Features:
@@ -11,7 +15,7 @@ GWindow is designed for **Vulkan**, OpenGL, OpenGL ES or even software rendering
 - 🪟 Native window creation on **Windows**, **Linux**, and **Android**
 - 🖥️ Windowed and fullscreen modes
 - ⌨️ Input handling: keyboard, mouse, touchscreen, gamepads
-- 🖱️ Mouse cursor icons support (pointer/caret/spinner/etc.) — (used by ImGui)
+- 🖱️ Mouse cursor icons support (pointer/caret/spinner/etc.) — (used by **ImGui**)
 - 📋 Clipboard text copy/paste
 - 🖌️ HiDPI/desktop scaling support
 - 🖼️ CPU software rendering with `showImage()`
@@ -77,7 +81,7 @@ class MyWindow : public GWindow {
     void onKey  (eAction action, eKeycode keycode)           { printf("Key: %s keycode:%d\n", type[action], keycode); }
     void onText (const char *str)                            { printf("Text: '%s'\n", str); }
     void onMove (int16_t x, int16_t y)                       { printf("Window Move: x=%d y=%d\n", x, y); }
-    void onFocus(bool hasFocus)                              { printf("Focus: %s\n", hasFocus ? "True" : "False"); }
+    void onFocus(bool hasFocus)                              { printf("Window Focus: %s\n", hasFocus ? "True" : "False"); }
     void onResize(uint16_t width, uint16_t height)           { printf("Window Resize: width=%4d height=%4d\n", width, height); }
     void onGPadConnect(uint8_t pad, bool active)             { printf("Gamepad %d %s\n", pad, active?"connected":"disconnected"); }
     void onGPadButton (uint8_t pad, uint8_t btn, bool down)  { printf("Gamepad %d button %d %s\n", pad, btn, down?"down":"up"); }
@@ -108,6 +112,9 @@ See `API-Reference.md` for other event-handling paradigms (polling, `Run()`).
 - [Integration](tests/INTEGRATION.md) : How to integrate GWindow with your renderer.
 - [API Reference](docs/API-Reference.md) : Detailed API list and method descriptions.
 - [Developer guide](docs/Developer-guide.md): Extending GWindow for new platforms. 
+- [Gamepads](extras/gamepads/README.md): Generating the Gamepad Mappings lookup table.
+- [Vulkan](extras/for%20Vulkan/README.md): Integrating with Vulkan.
+- [Dear ImGui](extras/for%20Dear%20ImGui/README.md): Integrating with Dear ImGui.
 
 ---
 

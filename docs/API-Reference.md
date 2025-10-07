@@ -190,7 +190,7 @@ If window is closing (after clicking the close button or calling close()):
 * `void setSize(uint w, uint h)` — Set Window width and height
 * `void setScale(float val)` — Set HiDPI scaling override. (0 for system scaling)
 * `void setSizeScaled(uint w, uint h)` — applies display scale factor.
-* `const void* getNativeHandle()` — for creating Vulkan/OpenGL surfaces.
+* `const void* getNativeHandle()` — create Vulkan/OpenGL surface. (see: [VkWindow](../extras/for Vulkan/README.md) )
 * `void setCursor(eCursor id)` — Set mouse icon (pointer, caret, spinner, etc.)
 * `void setFullscreen(bool enable)` — Set fullscreen or windowed mode
 * `void showImage(uint32_t* buf, uint32_t width, uint32_t height)`
