@@ -1,30 +1,30 @@
-// dear imgui: Platform Binding for VkWindow
+// dear imgui: Platform Binding for GWindow
 //
-// VkWindow is a cross-platform library for creating a window for graphics rendering.
+// GWindow is a cross-platform library for creating a window for graphics rendering.
 // It provides input event hooks for keyboard, mouse, touch-screen and gamepad events,
 // and works on Windows, Linux and Android. Bring your own graphics renderer. (Vulkan/OpenGL/pixbuf)
 
-#include "VkWindow.h"
-#include "imgui_impl_vkWindow.h"
+#include "Window.h"
+#include "imgui_impl_gWindow.h"
 #include "imgui.h"
 #include <chrono>
 
 float min(float a, float b) { return a>b?b:a; }
 float max(float a, float b) { return a>b?a:b; }
 
-static VkWindow* g_window = nullptr;
+static GWindow* g_window = nullptr;
 static float g_scale = 1.f;
 static ImGuiKey KeyMap[256]{};
 
-static const char* ImGui_ImplvkWindow_GetClipboardText(void* user_data) {
+static const char* ImGui_ImplgWindow_GetClipboardText(void* user_data) {
     return g_window->getClipboardText();
 }
 
-static void ImGui_ImplvkWindow_SetClipboardText(void* user_data, const char* text) {
+static void ImGui_ImplgWindow_SetClipboardText(void* user_data, const char* text) {
     g_window->setClipboardText(text);
 }
 
-bool ImGui_ImplvkWindow_Init(VkWindow* window) {
+bool ImGui_ImplgWindow_Init(GWindow* window) {
     g_window = window;
     g_scale = g_window->getScale();
 
@@ -153,8 +153,8 @@ bool ImGui_ImplvkWindow_Init(VkWindow* window) {
     KeyMap[eKEY_RightAlt]     = ImGuiKey_RightAlt;
     KeyMap[eKEY_RightGUI]     = ImGuiKey_RightSuper;
 
-    io.SetClipboardTextFn = ImGui_ImplvkWindow_SetClipboardText;
-    io.GetClipboardTextFn = ImGui_ImplvkWindow_GetClipboardText;
+    io.SetClipboardTextFn = ImGui_ImplgWindow_SetClipboardText;
+    io.GetClipboardTextFn = ImGui_ImplgWindow_GetClipboardText;
     io.ClipboardUserData = g_window;
 #if defined(_WIN32)
     //io.ImeWindowHandle = (void*)glfwGetWin32Window(g_Window);
@@ -163,11 +163,11 @@ bool ImGui_ImplvkWindow_Init(VkWindow* window) {
     return true;
 }
 
-void ImGui_ImplvkWindow_Shutdown() {
+void ImGui_ImplgWindow_Shutdown() {
     g_window = nullptr;
 }
 
-void ImGui_ImplvkWindow_UpdateMouse(uint8_t btns, int16_t x, int16_t y) {
+void ImGui_ImplgWindow_UpdateMouse(uint8_t btns, int16_t x, int16_t y) {
     // Update buttons
     ImGuiIO& io = ImGui::GetIO();
     io.MouseDown[0] = btns & 1;  // left button
@@ -180,13 +180,13 @@ void ImGui_ImplvkWindow_UpdateMouse(uint8_t btns, int16_t x, int16_t y) {
     }
 }
 
-void ImGui_ImplvkWindow_ScrollWheel(VkWindow* window, float xoffset, float yoffset) {
+void ImGui_ImplgWindow_ScrollWheel(GWindow* window, float xoffset, float yoffset) {
     ImGuiIO& io = ImGui::GetIO();
     io.MouseWheelH += xoffset;
     io.MouseWheel += yoffset;
 }
 
-void ImGui_ImplvkWindow_KeyPressed(VkWindow* window, int keycode, int action) {
+void ImGui_ImplgWindow_KeyPressed(GWindow* window, int keycode, int action) {
     ImGuiIO& io = ImGui::GetIO();
     bool down = (action==(int)eDOWN);
     ImGuiKey scancode = KeyMap[keycode];
@@ -198,7 +198,7 @@ void ImGui_ImplvkWindow_KeyPressed(VkWindow* window, int keycode, int action) {
     if((keycode == eKEY_LeftGUI)    ||(keycode == eKEY_RightGUI)    ) io.AddKeyEvent(ImGuiMod_Super, down);
 }
 
-void ImGui_ImplvkWindow_TextInput(VkWindow* window, const char* str) {
+void ImGui_ImplgWindow_TextInput(GWindow* window, const char* str) {
     ImGuiIO& io = ImGui::GetIO();
     unsigned int chr = str[0];
     io.AddInputCharacter(chr);
@@ -240,7 +240,7 @@ double wall_delta_time_hires() {  // returns wall clock time in seconds, since l
 
 float ActualFramerate;  // Wall-clock framerate average over last 120 frames
 
-void ImGui_ImplvkWindow_NewFrame() {
+void ImGui_ImplgWindow_NewFrame() {
     ImGuiIO& io = ImGui::GetIO();
     IM_ASSERT(io.Fonts->IsBuilt() && "Font atlas not built! It is generally built by the renderer back-end. Missing call to renderer _NewFrame() function? e.g. ImGui_ImplOpenGL3_NewFrame().");
 
@@ -275,13 +275,13 @@ void ImGui_ImplvkWindow_NewFrame() {
     ActualFramerate = rate;
     //------------------------------------------------
 
-    ImGui_ImplvkWindow_UpdateMouseCursor();
-    ImGui_ImplvkWindow_UpdateGamepads();
+    ImGui_ImplgWindow_UpdateMouseCursor();
+    ImGui_ImplgWindow_UpdateGamepads();
 
     //ImGui_ImplGlfw_UpdateMousePosAndButtons();  //TODO
 }
 
-void ImGui_ImplvkWindow_UpdateMouseCursor() {
+void ImGui_ImplgWindow_UpdateMouseCursor() {
     ImGuiIO& io = ImGui::GetIO();
     ImGuiConfigFlags flags = io.ConfigFlags;
     if(flags & ImGuiConfigFlags_NoMouseCursorChange) return;
@@ -305,7 +305,7 @@ void ImGui_ImplvkWindow_UpdateMouseCursor() {
     g_window->setCursor(cursor);
 }
 
-void ImGui_ImplvkWindow_UpdateGamepads() {
+void ImGui_ImplgWindow_UpdateGamepads() {
     ImGuiIO& io = ImGui::GetIO();
     if ((io.ConfigFlags & ImGuiConfigFlags_NavEnableGamepad) == 0) return;
     Gamepad& pad = g_window->getGamepad(0);

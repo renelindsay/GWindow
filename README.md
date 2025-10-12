@@ -6,7 +6,7 @@ GWindow is designed for **Vulkan**, OpenGL, OpenGL ES or even software rendering
 
 ![platforms.png](./docs/images/small/platforms.png) 
 
-![gwindow_win32_small.png](/home/rene/workspace/GWindow/docs/images/small/gwindow_win32_small.png) ![gwindow_linux_small.png](/home/rene/workspace/GWindow/docs/images/small/gwindow_linux_small.png) ![gwindow_android_small.png](/home/rene/workspace/GWindow/docs/images/small/gwindow_android_small.png)
+![gwindow_win32_small.png](./docs/images/small/gwindow_win32_small2.png) ![gwindow_linux_small.png](./docs/images/small/gwindow_linux_small2.png) ![gwindow_android_small.png](./docs/images/small/gwindow_android_small2.png)
 
 ---
 
