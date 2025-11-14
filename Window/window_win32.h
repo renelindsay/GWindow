@@ -48,6 +48,12 @@ const unsigned char WIN32_TO_HID[256] = {
       0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,    //240
       0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0     //256
 };
+
+struct native_handle {
+    HINSTANCE hInstance;
+    HWND hWnd;
+};
+
 //=============================Win32============================
 class Window_win32 : public WindowBase {
     HINSTANCE hInstance;
@@ -72,7 +78,7 @@ public:
     Window_win32(const char* title, uint width, uint height);
     virtual ~Window_win32();
     EventType getEvent(bool wait_for_event = false);
-    const void* getNativeHandle() const {return &hInstance;};
+    native_handle* getNativeHandle() const {return (native_handle*)&hInstance;};
     float getDisplayScale();
 #ifdef ENABLE_SHOWIMAGE
     void showImage(uint32_t* buf, uint32_t width, uint32_t height);

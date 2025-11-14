@@ -102,6 +102,7 @@ struct Mouse {
     bool btn[6] = {};                                                          // mouse btn state
 };
 //==============================================================
+ struct native_handle;
 //======================Window base class=======================
 class WindowBase {
 protected:
@@ -163,7 +164,7 @@ protected:
     virtual void setTitle(const char* title) {}
     virtual void setPosition(uint x, uint y) {}
     virtual void setSize(uint w, uint h) {}
-    virtual const void* getNativeHandle() const = 0;              // For creating Vulkan/OpenGL Surface
+    virtual native_handle* getNativeHandle() const = 0;           // For creating Vulkan/OpenGL Surface
     virtual void showImage(uint32_t* buf, uint32_t width, uint32_t height) {}
     virtual void setCursor(eCursor id) {}
     virtual void setFullscreen(bool enable) {}

@@ -334,6 +334,7 @@ struct Mouse {
     bool btn[6] = {};                                                          // mouse btn state
 };
 //==============================================================
+ struct native_handle;
 //======================Window base class=======================
 class WindowBase {
 protected:
@@ -395,7 +396,7 @@ protected:
     virtual void setTitle(const char* title) {}
     virtual void setPosition(uint x, uint y) {}
     virtual void setSize(uint w, uint h) {}
-    virtual const void* getNativeHandle() const = 0;              // For creating Vulkan/OpenGL Surface
+    virtual native_handle* getNativeHandle() const = 0;           // For creating Vulkan/OpenGL Surface
     virtual void showImage(uint32_t* buf, uint32_t width, uint32_t height) {}
     virtual void setCursor(eCursor id) {}
     virtual void setFullscreen(bool enable) {}
@@ -1133,6 +1134,12 @@ const unsigned char WIN32_TO_HID[256] = {
       0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,    //240
       0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0     //256
 };
+
+struct native_handle {
+    HINSTANCE hInstance;
+    HWND hWnd;
+};
+
 //=============================Win32============================
 class Window_win32 : public WindowBase {
     HINSTANCE hInstance;
@@ -1157,7 +1164,7 @@ public:
     Window_win32(const char* title, uint width, uint height);
     virtual ~Window_win32();
     EventType getEvent(bool wait_for_event = false);
-    const void* getNativeHandle() const {return &hInstance;};
+    native_handle* getNativeHandle() const {return (native_handle*)&hInstance;};
     float getDisplayScale();
 #ifdef ENABLE_SHOWIMAGE
     void showImage(uint32_t* buf, uint32_t width, uint32_t height);
@@ -1733,7 +1740,12 @@ const unsigned char EVDEV_TO_HID[256] = {
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0
 };
 
-// clang-format on
+struct native_handle {
+    xcb_connection_t* xcb_connection;
+    xcb_screen_t* xcb_screen;
+    xcb_window_t xcb_window;
+};
+
 //=============================XCB==============================
 class Window_xcb : public WindowBase {
     Display* display;                  // for XLib
@@ -1819,7 +1831,7 @@ class Window_xcb : public WindowBase {
     virtual ~Window_xcb();
     EventType getEvent(bool wait_for_event = false);
     //bool CanPresent(VkPhysicalDevice phy, uint32_t queue_family);  // check if this window can present this queue type
-    const void* getNativeHandle() const {return &xcb_connection;}
+    native_handle* getNativeHandle() const {return (native_handle*)&xcb_connection;}
     float getDisplayScale();
 #ifdef ENABLE_SHOWIMAGE
     void showImage(uint32_t* buf, uint32_t width, uint32_t height);
@@ -3341,7 +3353,11 @@ const unsigned char ANDROID_TO_HID[256] = {
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0
 };
-// clang-format on
+
+struct native_handle {
+    ANativeWindow* window;
+};
+
 //==========================Android=============================
 
 //------------------------ JNI Wrappers ------------------------
@@ -3912,7 +3928,7 @@ class Window_android : public WindowBase {
         //LOGI("%s keyboard", enabled ? "Show" : "Hide");
     }
 
-    virtual const void* getNativeHandle() const {return app->window;};
+    native_handle* getNativeHandle() const {return (native_handle*)&(app->window);}
 
     float getDisplayScale() {
         //Get device configuration for dp scaling

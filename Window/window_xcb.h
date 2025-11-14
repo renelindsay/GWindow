@@ -100,7 +100,12 @@ const unsigned char EVDEV_TO_HID[256] = {
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0
 };
 
-// clang-format on
+struct native_handle {
+    xcb_connection_t* xcb_connection;
+    xcb_screen_t* xcb_screen;
+    xcb_window_t xcb_window;
+};
+
 //=============================XCB==============================
 class Window_xcb : public WindowBase {
     Display* display;                  // for XLib
@@ -186,7 +191,7 @@ class Window_xcb : public WindowBase {
     virtual ~Window_xcb();
     EventType getEvent(bool wait_for_event = false);
     //bool CanPresent(VkPhysicalDevice phy, uint32_t queue_family);  // check if this window can present this queue type
-    const void* getNativeHandle() const {return &xcb_connection;}
+    native_handle* getNativeHandle() const {return (native_handle*)&xcb_connection;}
     float getDisplayScale();
 #ifdef ENABLE_SHOWIMAGE
     void showImage(uint32_t* buf, uint32_t width, uint32_t height);

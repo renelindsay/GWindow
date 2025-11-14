@@ -8,9 +8,9 @@ If you plan to use **Vulkan**, use `VkWindow` and `Vexel` to initialize the `VkS
 
 This is easier than using `getNativeHandle()` directly, but if you insist:
 
-## void* getNativeHandle():
+## native_handle* getNativeHandle():
 
-The `void* getNativeHandle()` function returns platform specific window handle parameters,  
+The `native_handle* getNativeHandle()` function returns platform specific window handle parameters,  
 required by Vulkan WSI, to create a VkSurfaceKHR, so Vulkan can render to the window surface.  
 
 On **Windows**, it returns this struct, for use by `VkWin32SurfaceCreateInfoKHR` and `vkCreateWin32SurfaceKHR()`:
@@ -32,10 +32,12 @@ struct native_handle {
 };
 ```
 
-On **Android**, it returns this handle, for use by `VkAndroidSurfaceCreateInfoKHR` and `vkCreateAndroidSurfaceKHR()`:
+On **Android**, it returns this struct, for use by `VkAndroidSurfaceCreateInfoKHR` and `vkCreateAndroidSurfaceKHR()`:
 
 ```cpp
-ANativeWindow* handle;
+struct native_handle {
+    ANativeWindow* window;
+};
 ```
 
 But like I said, its easier to just use the included `VkWindow` class instead.

@@ -47,7 +47,11 @@ const unsigned char ANDROID_TO_HID[256] = {
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0
 };
-// clang-format on
+
+struct native_handle {
+    ANativeWindow* window;
+};
+
 //==========================Android=============================
 
 //------------------------ JNI Wrappers ------------------------
@@ -618,7 +622,7 @@ class Window_android : public WindowBase {
         //LOGI("%s keyboard", enabled ? "Show" : "Hide");
     }
 
-    virtual const void* getNativeHandle() const {return app->window;};
+    native_handle* getNativeHandle() const {return (native_handle*)&(app->window);}
 
     float getDisplayScale() {
         //Get device configuration for dp scaling
