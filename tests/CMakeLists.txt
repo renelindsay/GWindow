@@ -9,3 +9,5 @@ endif()
 # Test apps
 add_subdirectory(test_lib)
 add_subdirectory(test_header)
+add_subdirectory(test_gles)
+

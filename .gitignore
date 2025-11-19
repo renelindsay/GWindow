@@ -8,6 +8,13 @@
 *.user
 *.ipch
 *.pdb
+*.ilk
+*.exe
+*.dll
+*.lib
+
+#QtCreator
+.qtcreator
 
 # CMake generated files
 CMakeFiles/
@@ -19,6 +26,10 @@ compile_commands.json
 # Test executables
 /tests/test_header/Test_header*
 /tests/test_lib/Test_lib*
+/tests/test_gles/Test_gles*
+
+# ANGLE
+/tests/test_opengl/angle-x64
 
 # Android Studio / Gradle
 .gradle/

@@ -41,14 +41,13 @@ endif()
 #=================================================================
 #=============================WINDOWS=============================
 if(WIN32)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
     add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
     remove_definitions(-Dfar)
     remove_definitions(-Dnear)
     remove_definitions(-DLoadImage)
     add_library(${PROJECT_NAME} STATIC ${SRC_LIST})
-    target_link_libraries(${PROJECT_NAME} xinput)    # for Gamepad
+    target_link_libraries(${PROJECT_NAME} xinput9_1_0)    # for Gamepad
 endif()
 #=================================================================
 #=============================ANDROID=============================

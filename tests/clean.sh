@@ -13,4 +13,7 @@ rm -r test_header/.cxx
 rm -r test_header/build
 rm -r test_header/Test_header
 
+rm -r test_gles/.cxx
+rm -r test_gles/build
+rm -r test_gles/Test_gles
 

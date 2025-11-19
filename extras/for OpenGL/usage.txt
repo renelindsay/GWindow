@@ -1,0 +1,7 @@
+Vulkan:
+  VkWindow winVk("Vulkan", 1280, 720);
+  winVk.CreateVkSurface(instance);
+
+OpenGL/ES:
+  GLWindow winGL("OpenGL", 1280, 720);
+  winGL.InitEGL(4, 6);  // or InitEGL(3,0,true) for GLES3

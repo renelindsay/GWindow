@@ -1578,7 +1578,7 @@ void Window_win32::ReadGamepadEvents() {
         return clipboard.c_str();
     }
 
-#endif ENABLE_CLIPBOARD
+#endif //ENABLE_CLIPBOARD
 //-------------------
 
 #ifdef ENABLE_FULLSCREEN
@@ -1741,6 +1741,7 @@ const unsigned char EVDEV_TO_HID[256] = {
 };
 
 struct native_handle {
+    Display* display;
     xcb_connection_t* xcb_connection;
     xcb_screen_t* xcb_screen;
     xcb_window_t xcb_window;
@@ -1831,7 +1832,7 @@ class Window_xcb : public WindowBase {
     virtual ~Window_xcb();
     EventType getEvent(bool wait_for_event = false);
     //bool CanPresent(VkPhysicalDevice phy, uint32_t queue_family);  // check if this window can present this queue type
-    native_handle* getNativeHandle() const {return (native_handle*)&xcb_connection;}
+    native_handle* getNativeHandle() const {return (native_handle*)&display;}
     float getDisplayScale();
 #ifdef ENABLE_SHOWIMAGE
     void showImage(uint32_t* buf, uint32_t width, uint32_t height);

@@ -55,12 +55,16 @@ Include in code:
 
 ## 🧪 Test Applications
 
-The two example apps are functionally equivalent, to demonstrate each method:
+The first two example apps are functionally equivalent, to demonstrate each method:
 
-**test_header** — Shows the single-header-file integration.  
-**test_lib** — Shows the modular library integration.
+- **test_header** — Shows the single-header-file integration.  
+- **test_lib** — Shows the modular library integration.
 
 Both apps create a window, draws a test image, and prints events to the terminal.
+
+- **test_gles** — A minimal OpenGLES app that just changes the background color.  
+On Linux, run '*requirements.sh*' to install the dev package for EGL+GLES headers.  
+On Windows, run '*requirements.bat*' to install ANGLE EGL+GLES dll's and headers.  
 
 ## 🔨 Building Tests
 ### Desktop (Windows / Linux)

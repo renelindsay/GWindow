@@ -492,7 +492,7 @@ void Window_win32::ReadGamepadEvents() {
         return clipboard.c_str();
     }
 
-#endif ENABLE_CLIPBOARD
+#endif //ENABLE_CLIPBOARD
 //-------------------
 
 #ifdef ENABLE_FULLSCREEN

@@ -28,7 +28,7 @@ function(add_gwindow target)
 
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
         # Windows-specific libs  (eg. user32 gdi32 winmm)
-        target_link_libraries(${target} PUBLIC xinput) # for Gamepad  
+        target_link_libraries(${target} PUBLIC xinput9_1_0) # for Gamepad
 
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Android")
         # android_native_app_glue
