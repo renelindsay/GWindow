@@ -16,4 +16,4 @@ dependencyResolutionManagement {
 rootProject.name = "GWindowTest"
 include ':test_lib'
 include ':test_header'
-include ':test_opengl'
+include ':test_gles'

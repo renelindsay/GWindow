@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "com.renegade.test_opengl"
+    namespace = "com.renegade.test_gles"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.renegade.test_opengl"
+        applicationId = "com.renegade.test_gles"
         minSdk = 28
         targetSdk = 34
         versionCode = 1

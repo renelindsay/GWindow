@@ -20,7 +20,7 @@
             
             <!-- Tell NativeActivity the name of our .so -->
             <meta-data android:name="android.app.lib_name"
-                       android:value="Test_opengl" />
+                       android:value="Test_gles" />
                        
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

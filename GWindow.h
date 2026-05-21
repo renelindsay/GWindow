@@ -3965,10 +3965,17 @@ class Window_android : public WindowBase {
         uint min_h = MIN(h, height)  // draw min of window-h and image-h
         int stride = outbuf.stride;  // Actual buffer stride for memory alignment
 
-        for(int y = 0; y<min_h; ++y) {
+        for(uint y = 0; y<min_h; ++y) {
             uint32_t* src = buf + y * width;
             uint32_t* dst = ((uint32_t*)outbuf.bits) + y*stride;
-            memcpy(dst, src, min_w*4);
+            //memcpy(dst, src, min_w*4);  // RGBA
+
+            for(uint32_t x = 0; x < min_w; ++x) {  // BGRA -> RGBA
+                uint32_t c = src[x];
+                dst[x] = (c & 0xFF00FF00) |
+                        ((c & 0x00FF0000) >> 16) |
+                        ((c & 0x000000FF) << 16);
+            }
         }
         ANativeWindow_unlockAndPost(wnd);
         ANativeWindow_release(wnd);
