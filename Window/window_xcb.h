@@ -194,7 +194,7 @@ public:
 
 };
 //==============================================================
-#endif
+#endif  // WINDOW_XCB
 
 #ifdef GWINDOW_IMPLEMENTATION
 

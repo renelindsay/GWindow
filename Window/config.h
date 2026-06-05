@@ -1,5 +1,6 @@
 #pragma once
 
+/*
 #ifdef _WIN32
     #undef  VK_USE_PLATFORM_WIN32_KHR
     #define VK_USE_PLATFORM_WIN32_KHR
@@ -10,6 +11,7 @@
     #undef  VK_USE_PLATFORM_XCB_KHR
     #define VK_USE_PLATFORM_XCB_KHR
 #endif
+*/
 
 #define ENABLE_MULTITOUCH
 #define ENABLE_GAMEPAD

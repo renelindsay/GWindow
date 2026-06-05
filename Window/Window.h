@@ -26,9 +26,12 @@
 #include "window_xcb.h"
 #include "window_win32.h"
 #include "window_android.h"
+#include "window_wayland.h"
 
 #if defined(VK_USE_PLATFORM_XCB_KHR)
     typedef Window_xcb GWindow;
+#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
+    typedef Window_wayland GWindow;
 #elif defined(VK_USE_PLATFORM_WIN32_KHR)
     typedef Window_win32 GWindow;
 #elif defined(VK_USE_PLATFORM_ANDROID_KHR)
