@@ -13,4 +13,4 @@ sudo apt install libxcb-image0-dev                    # ShowImage
 sudo apt install libevdev-dev                         # Gamepad
 sudo apt install libxcb-icccm4  libxcb-icccm4-dev     # Clipboard
 sudo apt install libxcb-cursor0 libxcb-cursor-dev     # Mouse cursors
-
+sudo apt install libxcb-xinput-dev                    # Multitouch xcb

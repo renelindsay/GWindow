@@ -20,7 +20,6 @@
 //#include <X11/Xlib.h>           // XLib only
 #include <X11/Xlib-xcb.h>         // Xlib + XCB
 #include <xkbcommon/xkbcommon.h>  // Keyboard   libxkbcommon-dev
-#include <X11/Xresource.h>        // DPI scale
 #include <stdlib.h>               // atof
 #include <assert.h>
 #ifdef ENABLE_SHOWIMAGE
@@ -45,39 +44,11 @@
 #ifdef ENABLE_CLIPBOARD
 #include <xcb/xcb_icccm.h>
 #endif
-//-------------------------------------------------
-
 #ifdef ENABLE_MULTITOUCH
+#include <xcb/xinput.h>
 #include <X11/extensions/XInput2.h>  // MultiTouch
-typedef uint16_t xcb_input_device_id_t;
-typedef uint32_t xcb_input_fp1616_t;
-// clang-format off
-typedef struct xcb_input_touch_begin_event_t {  // from xinput.h in XCB 1.12 (current version is 1.11)
-    uint8_t                   response_type;
-    uint8_t                   extension;
-    uint16_t                  sequence;
-    uint32_t                  length;
-    uint16_t                  event_type;
-    xcb_input_device_id_t     deviceid;
-    xcb_timestamp_t           time;
-    uint32_t                  detail;
-    xcb_window_t              root;
-    xcb_window_t              event;
-    xcb_window_t              child;
-    uint32_t                  full_sequence;
-    xcb_input_fp1616_t        root_x;
-    xcb_input_fp1616_t        root_y;
-    xcb_input_fp1616_t        event_x;
-    xcb_input_fp1616_t        event_y;
-    uint16_t                  buttons_len;
-    uint16_t                  valuators_len;
-    xcb_input_device_id_t     sourceid;
-    // uint8_t                   pad0[2];
-    // uint32_t                  flags;
-    // xcb_input_modifier_info_t mods;
-    // xcb_input_group_info_t    group;
-} xcb_input_touch_begin_event_t;
 #endif
+//-------------------------------------------------
 
 // clang-format off
 // Convert native EVDEV key-code to cross-platform USB HID code.
@@ -126,7 +97,6 @@ class Window_xcb : public WindowBase {
     //---Touch Device---
     CMTouch MTouch;
     int xi_opcode;  // 131
-    int xi_devid;   // 2
     //------------------
     //----- Cursor -----
 #ifdef ENABLE_CURSOR
@@ -416,27 +386,10 @@ bool Window_xcb::InitTouch() {
         return false;
     }
 
-    {  // select device
-        int cnt;
-        XIDeviceInfo* di = XIQueryDevice(display, XIAllDevices, &cnt);
-        for (int i = 0; i < cnt; ++i) {
-            XIDeviceInfo* dev = &di[i];
-            for (int j = 0; j < dev->num_classes; ++j) {
-                XITouchClassInfo* tcinfo = (XITouchClassInfo*)(dev->classes[j]);
-                if (tcinfo->type != XITouchClass) {
-                    xi_devid = dev->deviceid;
-                    goto endloop;
-                }
-            }
-        }
-    endloop:
-        XIFreeDeviceInfo(di);
-    }
-
     {  // select which events to listen to
         unsigned char buf[3] = {};
         XIEventMask mask     = {};
-        mask.deviceid        = xi_devid;
+        mask.deviceid        = XIAllMasterDevices;
         mask.mask_len        = XIMaskLen(XI_TouchEnd);
         mask.mask            = buf;
         XISetMask(mask.mask, XI_TouchBegin);
@@ -616,23 +569,23 @@ EventType Window_xcb::getEvent(bool wait_for_event) {
 }
 
 float Window_xcb::getDisplayScale() {
-    float dpi = 0.f;
-    XrmValue value;
-    char *type = NULL;
-    char *resourceString = XResourceManagerString(display);
-    XrmInitialize();
-    XrmDatabase db = XrmGetStringDatabase(resourceString);
-    if (resourceString) {
-        //printf("Entire DB:\n%s\n", resourceString);
-        if (XrmGetResource(db, "Xft.dpi", "String", &type, &value) == True) {
-            if (value.addr) {
-                dpi = atof(value.addr);
-            }
-        }
+    xcb_atom_t resource_manager = GetAtom("RESOURCE_MANAGER");
+    xcb_get_property_cookie_t cookie = xcb_get_property(
+        xcb_connection, 0, xcb_screen->root, resource_manager, XCB_GET_PROPERTY_TYPE_ANY, 0, UINT32_MAX);
+    xcb_get_property_reply_t* reply = xcb_get_property_reply(xcb_connection, cookie, nullptr);
+    const char* text = (const char*)xcb_get_property_value(reply);
+    //int len = xcb_get_property_value_length(reply);
+    //std::string resources(text, len);
+    //printf("%s", text);
+    const char* key = "Xft.dpi:";
+    const char* p = strstr(text, key);
+    float scale = 1.0f;
+    if (p) {
+        p += strlen(key);
+        scale = strtof(p, nullptr) / 96.0f;
     }
-    //printf("Monitor DPI: %f\n", dpi);
-    //display_scale = dpi / 96.f;
-    return dpi / 96.f;
+    free(reply);
+    return scale;
 }
 
 #ifdef ENABLE_SHOWIMAGE
@@ -654,7 +607,6 @@ void Window_xcb::showImage(uint32_t* buf, uint32_t width, uint32_t height) {  //
     xcb_free_pixmap(c, pixmap);
 }
 #endif
-
 
 void Window_xcb::setCursor(eCursor id) {
 #ifdef ENABLE_CURSOR

@@ -57,6 +57,9 @@ int main(int argc, char *argv[]) {
 
     //VkSurfaceKHR surface = window.CreateVkSurface(instance);  // Create the Vulkan surface (requires vkUtils)
 
+    float s = window.getDisplayScale();
+    printf("scale=%f\n",s);
+
     while(window.pollEvents()) {                                // Main event loop, runs until window is closed.
         bool key_pressed = window.getKeyState(eKEY_LeftShift);
         if (key_pressed) printf("LEFT SHIFT PRESSED\r");

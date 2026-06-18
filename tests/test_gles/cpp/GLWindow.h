@@ -1,7 +1,8 @@
 // GLWindow.h
 #pragma once
-#include "Window.h"     // your GWindow base
+#include "Window.h"     // GWindow base
 #include <EGL/egl.h>
+#include <EGL/eglext.h>
 
 class GLWindow : public GWindow {
 protected:

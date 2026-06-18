@@ -11,7 +11,8 @@ bool GLWindow::InitEGL(int glMajor, int glMinor) {
 #elif __ANDROID__
     eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
 #elif __linux__
-    eglDisplay = eglGetDisplay((EGLNativeDisplayType)nh->display);
+    //eglDisplay = eglGetDisplay((EGLNativeDisplayType)nh->display);                        // for xlib
+    eglDisplay = eglGetPlatformDisplay(EGL_PLATFORM_XCB_EXT, nh->xcb_connection, nullptr);  // for xcb
 #endif
 
     if (eglDisplay == EGL_NO_DISPLAY) return false;
