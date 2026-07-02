@@ -20,14 +20,19 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         #add_definitions(-DVK_USE_PLATFORM_WAYLAND_KHR)
         find_package(PkgConfig REQUIRED)
 
+
+        aux_source_directory(. SRC_LIST)
+        aux_source_directory(wayland SRC_LIST)
         add_library(${PROJECT_NAME} STATIC ${SRC_LIST})
-        pkg_check_modules(WAYLAND REQUIRED wayland-client)
-        pkg_check_modules(WAYLAND REQUIRED wayland-cursor)
-        #pkg_check_modules(WAYLAND REQUIRED wayland-egl)
+
+        pkg_check_modules(WAYLAND REQUIRED
+            wayland-client
+            wayland-cursor
+            #wayland-egl
+        )
 
         pkg_check_modules(XKBCOMMON REQUIRED xkbcommon)
 
-        aux_source_directory(wayland SRC_LIST)
         target_include_directories(${PROJECT_NAME} PUBLIC wayland)
 
         target_include_directories(${PROJECT_NAME} PUBLIC
@@ -39,6 +44,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             ${WAYLAND_LIBRARIES}
             ${XKBCOMMON_LIBRARIES}
         )
+        message(STATUS "WAYLAND_LIBRARIES = ${WAYLAND_LIBRARIES}")
+        message(STATUS "WAYLAND_INCLUDE_DIRS = ${WAYLAND_INCLUDE_DIRS}")
 
         #target_link_libraries(${PROJECT_NAME} PUBLIC wayland-client wayland-cursor)
 
