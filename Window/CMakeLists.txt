@@ -22,7 +22,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 
         aux_source_directory(. SRC_LIST)
-        aux_source_directory(wayland SRC_LIST)
         add_library(${PROJECT_NAME} STATIC ${SRC_LIST})
 
         pkg_check_modules(WAYLAND REQUIRED
@@ -30,18 +29,20 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             wayland-cursor
             #wayland-egl
         )
-
+        pkg_check_modules(LIBDECOR REQUIRED libdecor-0)
         pkg_check_modules(XKBCOMMON REQUIRED xkbcommon)
 
         target_include_directories(${PROJECT_NAME} PUBLIC wayland)
 
         target_include_directories(${PROJECT_NAME} PUBLIC
             ${WAYLAND_INCLUDE_DIRS}
+            ${LIBDECOR_INCLUDE_DIRS}
             ${XKBCOMMON_INCLUDE_DIRS}
         )
 
         target_link_libraries(${PROJECT_NAME} PUBLIC
             ${WAYLAND_LIBRARIES}
+            ${LIBDECOR_LIBRARIES}
             ${XKBCOMMON_LIBRARIES}
         )
         message(STATUS "WAYLAND_LIBRARIES = ${WAYLAND_LIBRARIES}")

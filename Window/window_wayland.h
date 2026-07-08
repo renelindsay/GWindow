@@ -6,15 +6,13 @@
 
 #include "WindowBase.h"
 #include <wayland-client.h>
-#include "wayland/xdg-decoration.h"
-#include "wayland/xdg-shell-protocol.h"
+#include <libdecor.h>
 
 #include <sys/mman.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <cstdlib>
-#include <assert.h>
-#include <poll.h>
+#include <cassert>
 
 struct native_handle {
     wl_display* display;
@@ -29,49 +27,26 @@ public:
     wl_registry*   registry   = nullptr;
     wl_compositor* compositor = nullptr;
     wl_shm*        shm        = nullptr;
-    xdg_wm_base*   xdg_wm     = nullptr;
-    xdg_surface*   xdg_surf   = nullptr;
-    xdg_toplevel*  toplevel   = nullptr;
+
+    // libdecor owns the xdg_surface / xdg_toplevel internally now.
+    libdecor*       decor_context = nullptr;
+    libdecor_frame* decor_frame   = nullptr;
+    bool            has_configured = false;  // set true after the first libdecor configure+commit
 
     // TEMPORARY: solid-color SHM buffer, used only until Vulkan swapchain presentation is wired up.
     // Once main.cpp creates a VkSurfaceKHR + swapchain for this window, vkQueuePresentKHR will
     // attach/commit swapchain images itself, and this test buffer can be removed.
     wl_buffer* test_buffer = nullptr;
 
-    // --- xdg_toplevel events ---
-    static void on_toplevel_configure(void* data, xdg_toplevel*,  int32_t w, int32_t h, wl_array* states) {
-        if (w > 0 && h > 0) {
-            auto* self = static_cast<Window_wayland*>(data);
-
-           if(w != self->shape.width || h != self->shape.height) {
-               self->eventFIFO.push(self->resizeEvent(w,h));
-            }
-
-            bool activated = false;
-            auto* state = static_cast<uint32_t*>(states->data);
-            auto* end = reinterpret_cast<uint32_t*>(static_cast<char*>(states->data) + states->size);
-            for (; state != end; ++state) {
-                if (*state == XDG_TOPLEVEL_STATE_ACTIVATED) { activated = true; break; }
-            }
-            if (activated != self->has_focus) self->eventFIFO.push(self->focusEvent(activated));
-        }
-    }
-    static void on_toplevel_close(void* data, xdg_toplevel*) {
-        auto* self = static_cast<Window_wayland*>(data);
-        self->eventFIFO.push(self->closeEvent());
-    }
-    static constexpr xdg_toplevel_listener toplevel_listener = { on_toplevel_configure, on_toplevel_close };
-
-    wl_buffer* MakeTestBuffer(int w, int h);  // TEMPORARY
+    wl_buffer* MakeTestBuffer(int w, int h);  // TEMPORARY: see note above test_buffer
 
     void Create(const char* title="Window", uint width=640, uint height=480);
 public:
+    void setTitle(const char* title) { libdecor_frame_set_title(decor_frame, title); }
     Window_wayland() {Create();}
     Window_wayland(const char* title, uint width, uint height);
     virtual ~Window_wayland();
-
     EventType getEvent(bool wait_for_event = false);
-
     native_handle* getNativeHandle() const {return (native_handle*)&display;}
 };
 //==============================================================
@@ -80,40 +55,90 @@ public:
 #ifdef GWINDOW_IMPLEMENTATION
 
 //======================WAYLAND CALLBACKS=======================
-    // --- Registry listener ---
+    // --- Registry listener --- (libdecor binds xdg_wm_base itself; we only need compositor + shm)
     static void on_global(void* data, wl_registry* reg, uint32_t name, const char* iface, uint32_t version) {
         auto* w = static_cast<Window_wayland*>(data);
         if (strcmp(iface, wl_compositor_interface.name) == 0)
             w->compositor = (wl_compositor*)wl_registry_bind(reg, name, &wl_compositor_interface, 4);
-        else if (strcmp(iface, xdg_wm_base_interface.name) == 0)
-            w->xdg_wm = (xdg_wm_base*)wl_registry_bind(reg, name, &xdg_wm_base_interface, 1);
         else if (strcmp(iface, wl_shm_interface.name) == 0)
             w->shm = (wl_shm*)wl_registry_bind(reg, name, &wl_shm_interface, 1);
     }
     static void on_global_remove(void*, wl_registry*, uint32_t) {}
     static constexpr wl_registry_listener registry_listener = { on_global, on_global_remove };
 
-    // --- xdg_wm_base ping/pong (required or compositor kills the client) ---
-    static void on_ping(void*, xdg_wm_base* base, uint32_t serial) {xdg_wm_base_pong(base, serial);}
-    static constexpr xdg_wm_base_listener wm_base_listener = { on_ping };
+    // --- libdecor top-level errors ---
+    static void decor_error(libdecor* context, libdecor_error error, const char* message) {
+        printf("libdecor error (%d): %s\n", (int)error, message);
+    }
+    static constexpr libdecor_interface decor_iface = { decor_error };
 
-    // --- xdg_surface configure (must ack or nothing appears) ---
-    static void on_xdg_surface_configure(void* data, xdg_surface* surf, uint32_t serial) {
-        //printf("configure received\n");
+    // --- libdecor frame callbacks ---
+    static void decor_frame_configure(libdecor_frame* frame, libdecor_configuration* configuration, void* data) {
         auto* w = static_cast<Window_wayland*>(data);
-        xdg_surface_ack_configure(surf, serial);
 
-        // TEMPORARY: attach a solid-color test buffer so the window becomes visible.
-        // Remove this once Vulkan swapchain presentation attaches real frames instead.
-        if (!w->test_buffer) w->test_buffer = w->MakeTestBuffer(w->shape.width, w->shape.height);
+        int width = 0, height = 0;
+        if (!libdecor_configuration_get_content_size(configuration, frame, &width, &height)) {
+            // Compositor didn't suggest a size (e.g. first configure) -- keep current/default size.
+            width  = w->shape.width  ? w->shape.width  : 640;
+            height = w->shape.height ? w->shape.height : 480;
+        }
+
+        bool size_changed = (width != w->shape.width || height != w->shape.height);
+        if (width > 0 && height > 0 && size_changed)
+            w->eventFIFO.push(w->resizeEvent(width, height));
+
+        // Focus (and other window state) no longer comes from a raw xdg_toplevel states
+        // array -- libdecor exposes it as a bitmask via libdecor_configuration_get_window_state().
+        libdecor_window_state window_state = LIBDECOR_WINDOW_STATE_NONE;
+        if (!libdecor_configuration_get_window_state(configuration, &window_state))
+            window_state = LIBDECOR_WINDOW_STATE_NONE;  // no state info yet (can happen on first configure)
+
+        bool active = (window_state & LIBDECOR_WINDOW_STATE_ACTIVE) != 0;
+        if (active != w->has_focus) w->eventFIFO.push(w->focusEvent(active));
+
+        // TEMPORARY: (re)build the solid-color test buffer to match the configured size.
+        // Remove this block once Vulkan swapchain presentation attaches real frames instead.
+        if (!w->test_buffer || size_changed) {
+            if (w->test_buffer) { wl_buffer_destroy(w->test_buffer); w->test_buffer = nullptr; }
+            w->test_buffer = w->MakeTestBuffer(width, height);
+        }
         if (w->test_buffer) {
             wl_surface_attach(w->surface, w->test_buffer, 0, 0);
-            wl_surface_damage(w->surface, 0, 0, w->shape.width, w->shape.height);
+            wl_surface_damage(w->surface, 0, 0, width, height);
         }
+
+        libdecor_state* state = libdecor_state_new(width, height);
+        libdecor_frame_commit(frame, state, configuration);
+        libdecor_state_free(state);
+
+        // libdecor_frame_commit() only commits libdecor's own bookkeeping (ack_configure,
+        // window geometry, its decoration subsurfaces) -- it does NOT commit our content
+        // surface. We must flush the attach+damage above ourselves, or nothing ever appears.
         wl_surface_commit(w->surface);
-        //wl_display_flush(w->display);
+
+        w->has_configured = true;
     }
-    static constexpr xdg_surface_listener surface_listener = { on_xdg_surface_configure };
+
+    static void decor_frame_close(libdecor_frame*, void* data) {
+        auto* w = static_cast<Window_wayland*>(data);
+        w->eventFIFO.push(w->closeEvent());
+    }
+
+    // libdecor asks us to commit the underlying wl_surface when it changes the decoration
+    // (e.g. resizing the decoration buffer). Just commit -- the content buffer is already attached.
+    static void decor_frame_commit(libdecor_frame*, void* data) {
+        auto* w = static_cast<Window_wayland*>(data);
+        wl_surface_commit(w->surface);
+    }
+
+    static void decor_frame_dismiss_popup(libdecor_frame*, const char*, void*) {}
+
+    static constexpr libdecor_frame_interface decor_frame_iface = {
+        decor_frame_configure,
+        decor_frame_close,
+        decor_frame_commit,
+        decor_frame_dismiss_popup,
+    };
 
 //==============================================================
 
@@ -159,74 +184,62 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
 
     printf("Creating Wayland-Window...\n");
 
-    display  = wl_display_connect(nullptr);
+    display = wl_display_connect(nullptr);
     if (!display) { printf("ERROR: wl_display_connect failed (no Wayland session?)\n"); return; }
 
     registry = wl_display_get_registry(display);
     wl_registry_add_listener(registry, &registry_listener, this);
-    wl_display_roundtrip(display);  // populates compositor + xdg_wm + shm
+    wl_display_roundtrip(display);  // populates compositor + shm
 
     if (!compositor) printf("ERROR: wl_compositor not found\n");
-    if (!xdg_wm)     printf("ERROR: xdg_wm_base not found\n");
     if (!shm)        printf("ERROR: wl_shm not found\n");
 
-    xdg_wm_base_add_listener(xdg_wm, &wm_base_listener, this);
+    surface = wl_compositor_create_surface(compositor);
+    assert(surface);
 
-    surface  = wl_compositor_create_surface(compositor);            assert(surface);
-    xdg_surf = xdg_wm_base_get_xdg_surface(xdg_wm, surface);        assert(xdg_surf);
-    xdg_surface_add_listener(xdg_surf, &surface_listener, this);
+    decor_context = libdecor_new(display, const_cast<libdecor_interface*>(&decor_iface));
+    assert(decor_context);
 
-    toplevel = xdg_surface_get_toplevel(xdg_surf);                  assert(toplevel);
-    xdg_toplevel_add_listener(toplevel, &toplevel_listener, this);
-    xdg_toplevel_set_title(toplevel, title);
+    decor_frame = libdecor_decorate(decor_context, surface,
+                                     const_cast<libdecor_frame_interface*>(&decor_frame_iface), this);
+    assert(decor_frame);
 
-    wl_surface_commit(surface);
-    //wl_display_flush(display);
+    libdecor_frame_set_title(decor_frame, title);
+    libdecor_frame_set_app_id(decor_frame, title);
+    libdecor_frame_map(decor_frame);  // triggers the first configure
 
-    //wl_display_roundtrip(display);  // triggers the initial configure -> on_xdg_surface_configure -> buffer attach
-    int ret = wl_display_roundtrip(display);
-    printf("roundtrip returned %d\n", ret);
+    // Block until the first configure+commit has happened (mirrors the old double-roundtrip).
+    while (!has_configured) {
+        if (libdecor_dispatch(decor_context, -1) < 0) {
+            printf("ERROR: libdecor_dispatch failed during initial configure\n");
+            break;
+        }
+    }
 
-    int err = wl_display_get_error(display);
-    if (err){printf("Wayland error: %d\n", err);}
-
-    eventFIFO.push(resizeEvent(width, height));
+    eventFIFO.push(resizeEvent(shape.width, shape.height));
 }
 
 
 EventType Window_wayland::getEvent(bool wait_for_event) {
     if (!eventFIFO.isEmpty()) return eventFIFO.pop();
 
-    if (wait_for_event) wl_display_dispatch(display);
-    //else                wl_display_dispatch_pending(display);
-    else {
-        // Non-blocking: only read from the socket if data is actually available.
-        while (wl_display_prepare_read(display) != 0)
-            wl_display_dispatch_pending(display);   // drain anything already queued first
-
-        wl_display_flush(display);                  // send any pending outgoing requests (e.g. pong)
-        pollfd pfd = { wl_display_get_fd(display), POLLIN, 0 };
-        if (poll(&pfd, 1, 0) > 0) wl_display_read_events(display);  // new data available -> read it
-        else                      wl_display_cancel_read(display);  // nothing to read, cancel cleanly
-        wl_display_dispatch_pending(display);                       // dispatch whatever we just read
-    }
-
-
+    // libdecor_dispatch wraps wl_display's fd *and* libdecor's own internal fd(s),
+    // so this replaces plain wl_display_dispatch()/dispatch_pending() entirely.
+    libdecor_dispatch(decor_context, wait_for_event ? -1 : 0);
 
     if (!eventFIFO.isEmpty()) return eventFIFO.pop();
     return {EventType::NONE};
 }
 
 Window_wayland::~Window_wayland() {
-    if (test_buffer) wl_buffer_destroy(test_buffer);  // TEMPORARY: remove alongside MakeTestBuffer
-    if (toplevel)   xdg_toplevel_destroy(toplevel);
-    if (xdg_surf)   xdg_surface_destroy(xdg_surf);
-    if (surface)    wl_surface_destroy(surface);
-    if (xdg_wm)     xdg_wm_base_destroy(xdg_wm);
-    if (compositor) wl_compositor_destroy(compositor);
-    if (shm)        wl_shm_destroy(shm);
-    if (registry)   wl_registry_destroy(registry);
-    if (display)    wl_display_disconnect(display);
+    if (test_buffer)   wl_buffer_destroy(test_buffer);  // TEMPORARY: remove alongside MakeTestBuffer
+    if (decor_frame)   libdecor_frame_unref(decor_frame);
+    if (surface)       wl_surface_destroy(surface);
+    if (decor_context) libdecor_unref(decor_context);
+    if (compositor)    wl_compositor_destroy(compositor);
+    if (shm)           wl_shm_destroy(shm);
+    if (registry)      wl_registry_destroy(registry);
+    if (display)       wl_display_disconnect(display);
 }
 
 #endif // GWINDOW_IMPLEMENTATION
