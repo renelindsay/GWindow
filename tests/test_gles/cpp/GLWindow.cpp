@@ -11,8 +11,14 @@ bool GLWindow::InitEGL(int glMajor, int glMinor) {
 #elif __ANDROID__
     eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
 #elif __linux__
-    //eglDisplay = eglGetDisplay((EGLNativeDisplayType)nh->display);                        // for xlib
-    eglDisplay = eglGetPlatformDisplay(EGL_PLATFORM_XCB_EXT, nh->xcb_connection, nullptr);  // for xcb
+    #ifdef   VK_USE_PLATFORM_XCB_KHR
+        //eglDisplay = eglGetDisplay((EGLNativeDisplayType)nh->display);                        // for xlib
+        eglDisplay = eglGetPlatformDisplay(EGL_PLATFORM_XCB_EXT, nh->xcb_connection, nullptr);  // for xcb
+
+    #elifdef VK_USE_PLATFORM_WAYLAND_KHR
+        eglDisplay = eglGetPlatformDisplay(EGL_PLATFORM_WAYLAND_EXT, nh->display, nullptr); // for wayland
+    #endif
+
 #endif
 
     if (eglDisplay == EGL_NO_DISPLAY) return false;
@@ -43,8 +49,16 @@ bool GLWindow::InitEGL(int glMajor, int glMinor) {
 #elif __ANDROID__
     eglSurface = eglCreateWindowSurface(eglDisplay, eglConfig, nh->window, nullptr);
 #elif __linux__
-    eglSurface = eglCreateWindowSurface(eglDisplay, eglConfig, (EGLNativeWindowType)nh->xcb_window, nullptr);
+    //eglSurface = eglCreateWindowSurface(eglDisplay, eglConfig, (EGLNativeWindowType)nh->xcb_window, nullptr);
 #endif
+
+#ifdef VK_USE_PLATFORM_XCB_KHR
+    eglSurface = eglCreateWindowSurface(eglDisplay, eglConfig, (EGLNativeWindowType)nh->xcb_window, nullptr);
+#elif  VK_USE_PLATFORM_WAYLAND_KHR
+    eglSurface = eglCreateWindowSurface(eglDisplay, eglConfig, (EGLNativeWindowType)nh->egl_window, nullptr);
+#endif
+
+
     if (eglSurface == EGL_NO_SURFACE) return false;
 
     // 4. Create context    

@@ -6,6 +6,8 @@
 
 #include "WindowBase.h"
 #include <wayland-client.h>
+#include <wayland-egl.h>
+#include <wayland-cursor.h>
 #include <libdecor.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -18,6 +20,7 @@
 struct native_handle {
     wl_display* display;
     wl_surface* surface;
+    wl_egl_window* egl_window;
 };
 
 //==========================WAYLAND=============================
@@ -25,6 +28,8 @@ class Window_wayland : public WindowBase {
 public:
     wl_display*    display    = nullptr;
     wl_surface*    surface    = nullptr;
+    wl_egl_window* egl_window = nullptr;
+
     wl_registry*   registry   = nullptr;
     wl_compositor* compositor = nullptr;
     wl_shm*        shm        = nullptr;
@@ -62,7 +67,7 @@ public:
 };
 //==============================================================
 #endif  // WINDOW_WAYLAND
-#define GWINDOW_IMPLEMENTATION
+//#define GWINDOW_IMPLEMENTATION
 #ifdef GWINDOW_IMPLEMENTATION
 
 // Convert native EVDEV key-code to cross-platform USB HID code.
@@ -128,8 +133,10 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         }
 
         bool size_changed = (width != w->shape.width || height != w->shape.height);
-        if (width > 0 && height > 0 && size_changed)
+        if (width > 0 && height > 0 && size_changed) {
+            if (w->egl_window) wl_egl_window_resize(w->egl_window, width, height, 0, 0);
             w->eventFIFO.push(w->resizeEvent(width, height));
+        }
 
         // Focus (and other window state) no longer comes from a raw xdg_toplevel states
         // array -- libdecor exposes it as a bitmask via libdecor_configuration_get_window_state().
@@ -246,7 +253,7 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
     #define GW_BTN_RIGHT  0x111
     #define GW_BTN_MIDDLE 0x112
 
-    static void pointer_enter(void* data, wl_pointer*, uint32_t, wl_surface*, wl_fixed_t sx, wl_fixed_t sy) {
+    static void pointer_enter(void* data, wl_pointer*, uint32_t serial, wl_surface*, wl_fixed_t sx, wl_fixed_t sy) {
         auto* w = static_cast<Window_wayland*>(data);
         w->eventFIFO.push(w->mouseEvent(eMOVE, (int16_t)wl_fixed_to_int(sx), (int16_t)wl_fixed_to_int(sy), 0));
     }
@@ -366,6 +373,7 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
 
     surface = wl_compositor_create_surface(compositor);
     if (!surface) { printf("ERROR: wl_compositor_create_surface failed\n"); return; }
+    egl_window = wl_egl_window_create(surface, width, height);
 
     decor_context = libdecor_new(display, const_cast<libdecor_interface*>(&decor_iface));
     if (!decor_context) { printf("ERROR: libdecor_new failed\n"); return; }
@@ -412,6 +420,7 @@ Window_wayland::~Window_wayland() {
 
     if (test_buffer)   wl_buffer_destroy(test_buffer);  // TEMPORARY: remove alongside MakeTestBuffer
     if (decor_frame)   libdecor_frame_unref(decor_frame);
+    if (egl_window)    wl_egl_window_destroy(egl_window);
     if (surface)       wl_surface_destroy(surface);
     if (decor_context) libdecor_unref(decor_context);
     if (compositor)    wl_compositor_destroy(compositor);

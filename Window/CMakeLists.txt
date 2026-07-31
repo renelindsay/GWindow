@@ -27,7 +27,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         pkg_check_modules(WAYLAND REQUIRED
             wayland-client
             wayland-cursor
-            #wayland-egl
+            wayland-egl
         )
         pkg_check_modules(LIBDECOR REQUIRED libdecor-0)
         pkg_check_modules(XKBCOMMON REQUIRED xkbcommon)
