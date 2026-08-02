@@ -48,6 +48,14 @@ public:
     xkb_keymap*  xkb_keymap_ptr = nullptr;  // (re)created from compositor-supplied keymap
     xkb_state*   xkb_state_ptr  = nullptr;  // tracks modifier state
 
+#ifdef ENABLE_CURSOR
+    wl_cursor_theme* cursor_theme        = nullptr;
+    wl_surface*      cursor_surface      = nullptr;
+    wl_cursor*       cursors[11]         = {};  // indexed by eCursor
+    uint32_t         pointer_enter_serial = 0;  // serial from the most recent wl_pointer::enter
+    void LoadCursorTheme();
+#endif
+
     // TEMPORARY: solid-color SHM buffer, used only until Vulkan swapchain presentation is wired up.
     // Once main.cpp creates a VkSurfaceKHR + swapchain for this window, vkQueuePresentKHR will
     // attach/commit swapchain images itself, and this test buffer can be removed.
@@ -64,6 +72,9 @@ public:
     virtual ~Window_wayland();
     EventType getEvent(bool wait_for_event = false);
     native_handle* getNativeHandle() const {return (native_handle*)&display;}
+#ifdef ENABLE_CURSOR
+    void setCursor(eCursor id);
+#endif
 };
 //==============================================================
 #endif  // WINDOW_WAYLAND
@@ -253,9 +264,15 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
     #define GW_BTN_RIGHT  0x111
     #define GW_BTN_MIDDLE 0x112
 
-    static void pointer_enter(void* data, wl_pointer*, uint32_t serial, wl_surface*, wl_fixed_t sx, wl_fixed_t sy) {
+    static void pointer_enter(void* data, wl_pointer*, uint32_t serial, wl_surface* entered_surface, wl_fixed_t sx, wl_fixed_t sy) {
         auto* w = static_cast<Window_wayland*>(data);
         w->eventFIFO.push(w->mouseEvent(eMOVE, (int16_t)wl_fixed_to_int(sx), (int16_t)wl_fixed_to_int(sy), 0));
+#ifdef ENABLE_CURSOR
+        if (entered_surface == w->surface) {
+            w->pointer_enter_serial = serial;
+            w->setCursor(eArrow);  // Set mouse cursor icon when mouse enters content surface.
+        }
+#endif
     }
 
     static void pointer_leave(void*, wl_pointer*, uint32_t, wl_surface*) {}
@@ -351,6 +368,36 @@ wl_buffer* Window_wayland::MakeTestBuffer(int w, int h) {
     return buffer;
 }
 
+#ifdef ENABLE_CURSOR
+void Window_wayland::LoadCursorTheme() {
+    cursor_theme = wl_cursor_theme_load(nullptr, 24, shm);
+    if (!cursor_theme) { printf("WARNING: wl_cursor_theme_load failed -- no cursor icons\n"); return; }
+    cursors[eCursor::eArrow]      = wl_cursor_theme_get_cursor(cursor_theme, "left_ptr");
+    cursors[eCursor::eCaret]      = wl_cursor_theme_get_cursor(cursor_theme, "xterm");
+    cursors[eCursor::eResizeAll]  = wl_cursor_theme_get_cursor(cursor_theme, "fleur");
+    cursors[eCursor::eResizeNS]   = wl_cursor_theme_get_cursor(cursor_theme, "sb_v_double_arrow");
+    cursors[eCursor::eResizeEW]   = wl_cursor_theme_get_cursor(cursor_theme, "sb_h_double_arrow");
+    cursors[eCursor::eResizeNESW] = wl_cursor_theme_get_cursor(cursor_theme, "top_right_corner");
+    cursors[eCursor::eResizeNWSE] = wl_cursor_theme_get_cursor(cursor_theme, "top_left_corner");
+    cursors[eCursor::eHand]       = wl_cursor_theme_get_cursor(cursor_theme, "hand2");
+    cursors[eCursor::eWait]       = wl_cursor_theme_get_cursor(cursor_theme, "wait");
+    cursors[eCursor::eProgress]   = wl_cursor_theme_get_cursor(cursor_theme, "progress");
+    cursors[eCursor::eNotAllowed] = wl_cursor_theme_get_cursor(cursor_theme, "circle");
+    cursor_surface = wl_compositor_create_surface(compositor);
+}
+
+void Window_wayland::setCursor(eCursor id) {
+    wl_cursor* cursor = cursors[id];
+    wl_cursor_image* image  = cursor->images[0];
+    uint             count  = cursor->image_count;  assert(count>0);
+    wl_buffer*       buffer = wl_cursor_image_get_buffer(image);
+    wl_pointer_set_cursor(pointer, pointer_enter_serial, cursor_surface, image->hotspot_x, image->hotspot_y);
+    wl_surface_attach(cursor_surface, buffer, 0, 0);
+    wl_surface_damage(cursor_surface, 0, 0, image->width, image->height);
+    wl_surface_commit(cursor_surface);
+}
+#endif  // ENABLE_CURSOR
+
 void Window_wayland::Create(const char* title, uint width, uint height) {
     shape.width  = width;
     shape.height = height;
@@ -370,6 +417,10 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
     if (!compositor) { printf("ERROR: wl_compositor not found\n"); return; }
     if (!shm)        { printf("ERROR: wl_shm not found\n");        return; }
     if (!seat)       printf("WARNING: wl_seat not found -- no keyboard/mouse input\n");
+
+#ifdef ENABLE_CURSOR
+    LoadCursorTheme();
+#endif
 
     surface = wl_compositor_create_surface(compositor);
     if (!surface) { printf("ERROR: wl_compositor_create_surface failed\n"); return; }
@@ -417,6 +468,11 @@ Window_wayland::~Window_wayland() {
     if (keyboard)      wl_keyboard_release(keyboard);
     if (pointer)       wl_pointer_release(pointer);
     if (seat)          wl_seat_release(seat);
+
+#ifdef ENABLE_CURSOR
+    if (cursor_surface) wl_surface_destroy(cursor_surface);
+    if (cursor_theme)   wl_cursor_theme_destroy(cursor_theme);
+#endif
 
     if (test_buffer)   wl_buffer_destroy(test_buffer);  // TEMPORARY: remove alongside MakeTestBuffer
     if (decor_frame)   libdecor_frame_unref(decor_frame);
