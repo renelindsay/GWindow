@@ -4,6 +4,13 @@
 #ifndef WINDOW_WAYLAND
 #define WINDOW_WAYLAND
 
+//#define ENABLE_MULTITOUCH
+//#define ENABLE_GAMEPAD
+//#define ENABLE_CLIPBOARD
+#define ENABLE_SHOWIMAGE
+#define ENABLE_CURSOR
+//#define ENABLE_FULLSCREEN
+
 #include "WindowBase.h"
 #include <wayland-client.h>
 #include <wayland-egl.h>
@@ -48,6 +55,8 @@ public:
     xkb_keymap*  xkb_keymap_ptr = nullptr;  // (re)created from compositor-supplied keymap
     xkb_state*   xkb_state_ptr  = nullptr;  // tracks modifier state
 
+    bool has_rendered = false;  // true once any API (showImage/EGL/Vulkan) has presented a real frame
+
 #ifdef ENABLE_CURSOR
     wl_cursor_theme* cursor_theme        = nullptr;
     wl_surface*      cursor_surface      = nullptr;
@@ -56,12 +65,9 @@ public:
     void LoadCursorTheme();
 #endif
 
-    // TEMPORARY: solid-color SHM buffer, used only until Vulkan swapchain presentation is wired up.
-    // Once main.cpp creates a VkSurfaceKHR + swapchain for this window, vkQueuePresentKHR will
-    // attach/commit swapchain images itself, and this test buffer can be removed.
-    wl_buffer* test_buffer = nullptr;
-
-    wl_buffer* MakeTestBuffer(int w, int h);  // TEMPORARY: see note above test_buffer
+    // Solid-color SHM buffer
+    wl_buffer* image_buffer = nullptr;
+    wl_buffer* MakeImageBuffer(int w, int h);
 
     void Create(const char* title="Window", uint width=640, uint height=480);
 public:
@@ -72,6 +78,11 @@ public:
     virtual ~Window_wayland();
     EventType getEvent(bool wait_for_event = false);
     native_handle* getNativeHandle() const {return (native_handle*)&display;}
+
+#ifdef ENABLE_SHOWIMAGE
+    void showImage(uint32_t* buf, uint32_t width, uint32_t height);
+#endif
+
 #ifdef ENABLE_CURSOR
     void setCursor(eCursor id);
 #endif
@@ -158,17 +169,18 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         bool active = (window_state & LIBDECOR_WINDOW_STATE_ACTIVE) != 0;
         if (active != w->has_focus) w->eventFIFO.push(w->focusEvent(active));
 
-        // TEMPORARY: (re)build the solid-color test buffer to match the configured size.
-        // Remove this block once Vulkan swapchain presentation attaches real frames instead.
-        if (!w->test_buffer || size_changed) {
-            if (w->test_buffer) { wl_buffer_destroy(w->test_buffer); w->test_buffer = nullptr; }
-            w->test_buffer = w->MakeTestBuffer(width, height);
-        }
-        if (w->test_buffer) {
-            wl_surface_attach(w->surface, w->test_buffer, 0, 0);
-            wl_surface_damage(w->surface, 0, 0, width, height);
-        }
+        // Build the solid-color test buffer to match the configured size.
+        if(!w->has_rendered) {
+            if (!w->image_buffer || size_changed) {
+                if (w->image_buffer) { wl_buffer_destroy(w->image_buffer); w->image_buffer = nullptr; }
+                w->image_buffer = w->MakeImageBuffer(width, height);
+            }
 
+            if (w->image_buffer) {
+                wl_surface_attach(w->surface, w->image_buffer, 0, 0);
+                wl_surface_damage(w->surface, 0, 0, width, height);
+            }
+        }
         libdecor_state* state = libdecor_state_new(width, height);
         libdecor_frame_commit(frame, state, configuration);
         libdecor_state_free(state);
@@ -338,12 +350,11 @@ Window_wayland::Window_wayland(const char* title, uint width, uint height) {
     Create(title, width, height);
 }
 
-// TEMPORARY: allocates a shared-memory buffer filled with a solid color, just so the
+// Allocates a shared-memory buffer filled with a solid color, so the
 // surface has *something* to display. A Wayland wl_surface stays unmapped (invisible)
 // until a wl_buffer is attached and committed -- ack_configure + commit alone is not
 // enough, unlike X11/Win32 where a blank window appears automatically.
-// Delete this function once real frames are presented via the Vulkan swapchain.
-wl_buffer* Window_wayland::MakeTestBuffer(int w, int h) {
+wl_buffer* Window_wayland::MakeImageBuffer(int w, int h) {
     if (!shm || w <= 0 || h <= 0) return nullptr;
     int stride = w * 4;
     int size   = stride * h;
@@ -367,6 +378,43 @@ wl_buffer* Window_wayland::MakeTestBuffer(int w, int h) {
     ::close(fd);
     return buffer;
 }
+
+
+#ifdef ENABLE_SHOWIMAGE
+void Window_wayland::showImage(uint32_t* buf, uint32_t width, uint32_t height) {
+    if (!shm || !buf || width == 0 || height == 0) return;
+
+    int stride = width * 4;
+    int size   = stride * height;
+
+    char path[] = "/tmp/wl_shm-XXXXXX";
+    int fd = mkstemp(path);
+    if (fd < 0) return;
+    ::unlink(path);
+    if (::ftruncate(fd, size) < 0) { ::close(fd); return; }
+
+    void* data = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (data == MAP_FAILED) { ::close(fd); return; }
+
+    memcpy(data, buf, size);
+    munmap(data, size);
+
+    wl_shm_pool* pool     = wl_shm_create_pool(shm, fd, size);
+    wl_buffer*   new_buf  = wl_shm_pool_create_buffer(pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
+    wl_shm_pool_destroy(pool);
+    ::close(fd);
+
+    if (!new_buf) return;
+
+    wl_surface_attach(surface, new_buf, 0, 0);
+    wl_surface_damage(surface, 0, 0, width, height);
+    wl_surface_commit(surface);
+
+    has_rendered = true;
+    wl_buffer_destroy(new_buf);  // matches existing test_buffer pattern -- see note below
+}
+#endif
+
 
 #ifdef ENABLE_CURSOR
 void Window_wayland::LoadCursorTheme() {
@@ -474,7 +522,7 @@ Window_wayland::~Window_wayland() {
     if (cursor_theme)   wl_cursor_theme_destroy(cursor_theme);
 #endif
 
-    if (test_buffer)   wl_buffer_destroy(test_buffer);  // TEMPORARY: remove alongside MakeTestBuffer
+    if (image_buffer)  wl_buffer_destroy(image_buffer);
     if (decor_frame)   libdecor_frame_unref(decor_frame);
     if (egl_window)    wl_egl_window_destroy(egl_window);
     if (surface)       wl_surface_destroy(surface);
