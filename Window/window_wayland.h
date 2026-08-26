@@ -23,7 +23,6 @@
 #include <fcntl.h>
 #include <cstdlib>
 #include <cassert>
-#include <algorithm>
 
 struct native_handle {
     wl_display* display;
@@ -56,8 +55,6 @@ public:
     xkb_keymap*  xkb_keymap_ptr = nullptr;  // (re)created from compositor-supplied keymap
     xkb_state*   xkb_state_ptr  = nullptr;  // tracks modifier state
 
-    bool surface_claimed = false;
-
 #ifdef ENABLE_CURSOR
     wl_cursor_theme* cursor_theme        = nullptr;
     wl_surface*      cursor_surface      = nullptr;
@@ -66,20 +63,17 @@ public:
     void LoadCursorTheme();
 #endif
 
-    // Solid-color SHM buffer
-    //wl_buffer* image_buffer = nullptr;
-    //wl_buffer* MakeImageBuffer(int w, int h);
-
     void Create(const char* title="Window", uint width=640, uint height=480);
 public:
     void setTitle(const char* title) { libdecor_frame_set_title(decor_frame, title); }
     void setPosition(uint x, uint y) {}  // No Wayland protocol equivalent -- permanent no-op.
+    void setSize(uint w, uint h);
+
     Window_wayland() {Create();}
     Window_wayland(const char* title, uint width, uint height);
     virtual ~Window_wayland();
     EventType getEvent(bool wait_for_event = false);
     native_handle* getNativeHandle() const {return (native_handle*)&display;}
-    virtual void onResize(uint16_t width, uint16_t height){surface_claimed=false;}
 
 #ifdef ENABLE_SHOWIMAGE
     void showImage(uint32_t* buf, uint32_t width, uint32_t height);
@@ -177,31 +171,10 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 
         bool active = (window_state & LIBDECOR_WINDOW_STATE_ACTIVE) != 0;
         if (active != w->has_focus) w->eventFIFO.push(w->focusEvent(active));
-/*
-        // Build the solid-color image buffer to match the configured size.
-        if(!w->surface_claimed) {
-            if (!w->image_buffer || size_changed) {
-                if (w->image_buffer) { wl_buffer_destroy(w->image_buffer); w->image_buffer = nullptr; }
-                w->image_buffer = w->MakeImageBuffer(width, height);
-            }
-
-            if (w->image_buffer) {
-                wl_surface_attach(w->surface, w->image_buffer, 0, 0);
-                wl_surface_damage(w->surface, 0, 0, width, height);
-            }
-        }
-*/
-
-        if(!w->surface_claimed) {w->showImage(nullptr,0,0);}
-
 
         libdecor_state* state = libdecor_state_new(width, height);
         libdecor_frame_commit(frame, state, configuration);
         libdecor_state_free(state);
-
-        // libdecor_frame_commit() only commits libdecor's own bookkeeping (ack_configure,
-        // window geometry, its decoration subsurfaces) -- it does NOT commit our content
-        // surface. We must flush the attach+damage above ourselves, or nothing ever appears.
         wl_surface_commit(w->surface);
 
         w->has_configured = true;
@@ -212,8 +185,7 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         w->eventFIFO.push(w->closeEvent());
     }
 
-    // libdecor asks us to commit the underlying wl_surface when it changes the decoration
-    // (e.g. resizing the decoration buffer). Just commit -- the content buffer is already attached.
+    // Called by libdecor, to flush decoration-only changes.
     static void decor_frame_commit(libdecor_frame*, void* data) {
         auto* w = static_cast<Window_wayland*>(data);
         wl_surface_commit(w->surface);
@@ -359,78 +331,24 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 
 //==============================================================
 
-
 Window_wayland::Window_wayland(const char* title, uint width, uint height) {
     Create(title, width, height);
 }
-/*
-// Allocates a shared-memory buffer filled with a solid color, so the
-// surface has *something* to display. A Wayland wl_surface stays unmapped (invisible)
-// until a wl_buffer is attached and committed -- ack_configure + commit alone is not
-// enough, unlike X11/Win32 where a blank window appears automatically.
-wl_buffer* Window_wayland::MakeImageBuffer(int w, int h) {
-    if (!shm || w <= 0 || h <= 0) return nullptr;
-    int stride = w * 4;
-    int size   = stride * h;
 
-    char path[] = "/tmp/wl_shm-XXXXXX";
-    int fd = mkstemp(path);
-    if (fd < 0) return nullptr;
-    ::unlink(path);
-    if (::ftruncate(fd, size) < 0) { ::close(fd); return nullptr; }
+void Window_wayland::setSize(uint w, uint h) {
+    if ((int)w == shape.width && (int)h == shape.height) return;
+    if (egl_window) wl_egl_window_resize(egl_window, w, h, 0, 0);
 
-    void* data = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (data == MAP_FAILED) { ::close(fd); return nullptr; }
-
-    uint32_t* pixels = (uint32_t*)data;
-    for (int i = 0; i < w * h; ++i) pixels[i] = 0xFF102040; //0xFF3060C0;
-    munmap(data, size);
-
-    wl_shm_pool* pool   = wl_shm_create_pool(shm, fd, size);
-    wl_buffer*   buffer = wl_shm_pool_create_buffer(pool, 0, w, h, stride, WL_SHM_FORMAT_ARGB8888);
-    wl_shm_pool_destroy(pool);
-    ::close(fd);
-
-    return buffer;
-}
-*/
-
-#ifdef ENABLE_SHOWIMAGE
-/*
-void Window_wayland::showImage(uint32_t* buf, uint32_t width, uint32_t height) {
-    if (!shm || !buf || width == 0 || height == 0) return;
-
-    int stride = width * 4;
-    int size   = stride * height;
-
-    char path[] = "/tmp/wl_shm-XXXXXX";
-    int fd = mkstemp(path);
-    if (fd < 0) return;
-    ::unlink(path);
-    if (::ftruncate(fd, size) < 0) { ::close(fd); return; }
-
-    void* data = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (data == MAP_FAILED) { ::close(fd); return; }
-
-    memcpy(data, buf, size);
-    munmap(data, size);
-
-    wl_shm_pool* pool     = wl_shm_create_pool(shm, fd, size);
-    wl_buffer*   new_buf  = wl_shm_pool_create_buffer(pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
-    wl_shm_pool_destroy(pool);
-    ::close(fd);
-
-    if (!new_buf) return;
-
-    wl_surface_attach(surface, new_buf, 0, 0);
-    wl_surface_damage(surface, 0, 0, width, height);
+    // Update libdecor with new content size
+    libdecor_state* state = libdecor_state_new(w, h);
+    libdecor_frame_commit(decor_frame, state, nullptr);
+    libdecor_state_free(state);
     wl_surface_commit(surface);
 
-    has_rendered = true;
-    wl_buffer_destroy(new_buf);  // matches existing image_buffer pattern -- see note below
+    eventFIFO.push(resizeEvent(w, h));
 }
-*/
 
+#ifdef ENABLE_SHOWIMAGE
 void Window_wayland::showImage(uint32_t* buf, uint32_t width, uint32_t height) {
     int sw = shape.width;
     int sh = shape.height;
@@ -468,22 +386,13 @@ void Window_wayland::showImage(uint32_t* buf, uint32_t width, uint32_t height) {
     ::close(fd);
     if (!buffer) return;
 
-    //if (image_buffer) wl_buffer_destroy(image_buffer);
-    //image_buffer = buffer;
-
     wl_buffer_add_listener(buffer, &buffer_listener, this);
 
     wl_surface_attach(surface, buffer, 0, 0);
     wl_surface_damage(surface, 0, 0, sw, sh);
     wl_surface_commit(surface);
-
-    surface_claimed = true;
-    //wl_buffer_destroy(buffer);
 }
-
-
 #endif
-
 
 #ifdef ENABLE_CURSOR
 void Window_wayland::LoadCursorTheme() {
@@ -515,6 +424,7 @@ void Window_wayland::setCursor(eCursor id) {
 }
 #endif  // ENABLE_CURSOR
 
+//NOTE: Wayland window does not appear until after you attach an image to it.
 void Window_wayland::Create(const char* title, uint width, uint height) {
     shape.width  = width;
     shape.height = height;
@@ -585,7 +495,6 @@ Window_wayland::~Window_wayland() {
     if (cursor_theme)   wl_cursor_theme_destroy(cursor_theme);
 #endif
 
-    //if (image_buffer)  wl_buffer_destroy(image_buffer);
     if (decor_frame)   libdecor_frame_unref(decor_frame);
     if (egl_window)    wl_egl_window_destroy(egl_window);
     if (surface)       wl_surface_destroy(surface);
