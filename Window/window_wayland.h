@@ -75,6 +75,9 @@ public:
     EventType getEvent(bool wait_for_event = false);
     native_handle* getNativeHandle() const {return (native_handle*)&display;}
 
+    wl_output* output = nullptr;
+    int32_t output_scale = 1;
+
 #ifdef ENABLE_SHOWIMAGE
     void showImage(uint32_t* buf, uint32_t width, uint32_t height);
 #endif
@@ -113,25 +116,99 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 // clang-format on
 
 //======================WAYLAND CALLBACKS=======================
-    // --- Registry listener --- (libdecor binds xdg_wm_base itself; we bind compositor + shm + seat)
+    // --- wl_output listener (integer desktop scale) ---
+    static void output_geometry(void*, wl_output*, int32_t, int32_t,
+                                int32_t, int32_t, int32_t,
+                                const char*, const char*, int32_t) {/*printf("output_geometry\n");*/}
+
+    static void output_mode(void*, wl_output*, uint32_t, int32_t, int32_t, int32_t) {}
+
+    static void output_done(void*, wl_output*) {}
+
+    static void output_scale(void* data, wl_output* output, int32_t factor) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (output == w->output) w->output_scale = factor;
+        //w->output_scale = factor;
+        //printf("scale=%d\n", factor);
+    }
+
+    static constexpr wl_output_listener output_listener = {
+        output_geometry,
+        output_mode,
+        output_done,
+        output_scale
+    };
+    // -------------------------
+    // --- Seat ---
     static void seat_capabilities(void* data, wl_seat* seat, uint32_t caps);
     static void seat_name(void*, wl_seat*, const char*) {}
     static constexpr wl_seat_listener seat_listener = { seat_capabilities, seat_name };
+    // ------------
 
+    // --- Registry listener --- (libdecor binds xdg_wm_base itself; we bind compositor + shm + seat)
+/*
     static void on_global(void* data, wl_registry* reg, uint32_t name, const char* iface, uint32_t version) {
         auto* w = static_cast<Window_wayland*>(data);
+        //printf("iface: %s\n", iface);
         if (strcmp(iface, wl_compositor_interface.name) == 0)
-            w->compositor = (wl_compositor*)wl_registry_bind(reg, name, &wl_compositor_interface, 4);
+            w->compositor = (wl_compositor*)wl_registry_bind(reg, name, &wl_compositor_interface, 6);  // compositor version 6
         else if (strcmp(iface, wl_shm_interface.name) == 0)
             w->shm = (wl_shm*)wl_registry_bind(reg, name, &wl_shm_interface, 1);
         else if (strcmp(iface, wl_seat_interface.name) == 0) {
             w->seat = (wl_seat*)wl_registry_bind(reg, name, &wl_seat_interface, 5);
             wl_seat_add_listener(w->seat, &seat_listener, w);
         }
+        else if (strcmp(iface, wl_output_interface.name) == 0) {
+            w->output = (wl_output*)wl_registry_bind(reg, name, &wl_output_interface, 2);
+            wl_output_add_listener(w->output, &output_listener, w);
+        }
+    }
+*/
+    static void on_global(void* data, wl_registry* reg, uint32_t name, const char* iface, uint32_t version) {
+        auto* w = static_cast<Window_wayland*>(data);
+        //printf("iface: %s\n", iface);
+        auto is=[iface](const wl_interface& i)->bool{ return (strcmp(iface, i.name) == 0);};
+        auto bind=[reg,name](const wl_interface& i, uint32_t ver)->void* {return wl_registry_bind(reg, name, &i, ver);};
+
+        if(is(wl_compositor_interface)){ w->compositor=(wl_compositor*)bind(wl_compositor_interface,6);}
+        if(is(wl_shm_interface)){        w->shm       =(wl_shm*)   bind(wl_shm_interface,   1);}
+        if(is(wl_seat_interface)){       w->seat      =(wl_seat*)  bind(wl_seat_interface,  5); wl_seat_add_listener(w->seat, &seat_listener, w);}
+        if(is(wl_output_interface)){     w->output    =(wl_output*)bind(wl_output_interface,2); wl_output_add_listener(w->output, &output_listener, w);}
     }
 
     static void on_global_remove(void*, wl_registry*, uint32_t) {}
     static constexpr wl_registry_listener registry_listener = { on_global, on_global_remove };
+    // -------------------------
+
+    // --- wl_surface ---
+    static void surface_enter(void* data, wl_surface* surface, wl_output* output) {
+        auto* w = static_cast<Window_wayland*>(data);
+        w->output = output;
+        //w->UpdateScale(); // output_scale has already been received through the wl_output listener
+        printf("enter\n");
+    }
+
+    static void surface_leave(void* data, wl_surface*, wl_output* output) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (w->output == output) w->output = nullptr;
+        printf("leave\n");
+    }
+
+    static void surface_preferred_buffer_scale(void* data, wl_surface*, int32_t factor) {
+        auto* w = static_cast<Window_wayland*>(data);
+        //w->preferred_scale = factor > 0 ? factor : 1;
+        //w->updateScaleFromOutputs();
+        printf("factor=%d\n", factor);
+    }
+    static void surface_preferred_buffer_transform(void*, wl_surface*, uint32_t) {}
+
+    static constexpr wl_surface_listener surface_listener = {
+        surface_enter,
+        surface_leave,
+        surface_preferred_buffer_scale,
+        surface_preferred_buffer_transform
+    };
+    //-------------------
 
     // --- wl_buffer release ---
     static void buffer_release(void* data, wl_buffer* buffer) {
@@ -139,26 +216,25 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         wl_buffer_destroy(buffer);
     }
     static constexpr wl_buffer_listener buffer_listener = { buffer_release };
+    // -------------------------
 
     // --- libdecor top-level errors ---
     static void decor_error(libdecor* context, libdecor_error error, const char* message) {
         printf("libdecor error (%d): %s\n", (int)error, message);
     }
     static constexpr libdecor_interface decor_iface = { decor_error };
+    // -------------------------
 
     // --- libdecor frame callbacks ---
     static void decor_frame_configure(libdecor_frame* frame, libdecor_configuration* configuration, void* data) {
         auto* w = static_cast<Window_wayland*>(data);
 
-        int width = 0, height = 0;
-        if (!libdecor_configuration_get_content_size(configuration, frame, &width, &height)) {
-            // Compositor didn't suggest a size (e.g. first configure) -- keep current/default size.
-            width  = w->shape.width  ? w->shape.width  : 640;
-            height = w->shape.height ? w->shape.height : 480;
-        }
-
+        int width  = w->shape.width;
+        int height = w->shape.height;
+        libdecor_configuration_get_content_size(configuration, frame, &width, &height);  // may or may not update width/height
+        if(height<1) height=1;
         bool size_changed = (width != w->shape.width || height != w->shape.height);
-        if (width > 0 && height > 0 && size_changed) {
+        if (size_changed) {
             if (w->egl_window) wl_egl_window_resize(w->egl_window, width, height, 0, 0);
             w->eventFIFO.push(w->resizeEvent(width, height));
         }
@@ -199,6 +275,7 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         decor_frame_commit,
         decor_frame_dismiss_popup,
     };
+    // -------------------------
 
     // --- wl_keyboard listener ---
     static void keyboard_keymap(void* data, wl_keyboard*, uint32_t format, int32_t fd, uint32_t size) {
@@ -451,6 +528,11 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
 
     surface = wl_compositor_create_surface(compositor);
     if (!surface) { printf("ERROR: wl_compositor_create_surface failed\n"); return; }
+
+    wl_surface_add_listener(surface, &surface_listener, this);
+    //wl_surface_set_buffer_scale(surface, 1);
+    //wl_surface_commit(surface);
+
     egl_window = wl_egl_window_create(surface, width, height);
 
     decor_context = libdecor_new(display, const_cast<libdecor_interface*>(&decor_iface));
@@ -471,7 +553,6 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
             break;
         }
     }
-
     eventFIFO.push(resizeEvent(shape.width, shape.height));
 }
 
