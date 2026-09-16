@@ -123,7 +123,7 @@ public:
     EventType gpadAxis   (uint8_t pad, uint8_t axis, float val);               // Gamepad axis events
     EventType closeEvent ();                                                   // Window closing
 
-    float display_scale = 0.f;
+    float scale_override = 0.f;
     bool running;
     bool has_focus;                                                            // true if window has focus
     bool is_resized;                                                           // true if window has been resized
@@ -150,8 +150,8 @@ public:
     uint width() {return shape.width; }
     uint height(){return shape.height;}
     bool resized() { bool resize = is_resized; is_resized = false; return resize; }
-    float getScale() {return (display_scale>0)? display_scale : getDisplayScale();}
-    void  setScale(float val) {display_scale = val;}
+    float getScale() {return (scale_override>0)? scale_override : getDisplayScale();}
+    void  setScale(float val=0) {scale_override = val;}
 
     virtual float getDisplayScale() {return 1.f;}
     virtual bool isFullscreen() {return fullscreen;}

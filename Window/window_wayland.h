@@ -36,15 +36,15 @@ public:
     wl_display*    display    = nullptr;
     wl_surface*    surface    = nullptr;
     wl_egl_window* egl_window = nullptr;
+    bool configured = false;
 
     wl_registry*   registry   = nullptr;
     wl_compositor* compositor = nullptr;
     wl_shm*        shm        = nullptr;
 
-    // libdecor owns the xdg_surface / xdg_toplevel internally now.
+    // libdecor owns xdg_surface / xdg_toplevel
     libdecor*       decor_context = nullptr;
     libdecor_frame* decor_frame   = nullptr;
-    bool            has_configured = false;  // set true after the first libdecor configure+commit
 
     // --- Input (wl_seat) ---
     wl_seat*     seat     = nullptr;
@@ -62,21 +62,20 @@ public:
     uint32_t         pointer_enter_serial = 0;  // serial from the most recent wl_pointer::enter
     void LoadCursorTheme();
 #endif
-
+    float scale = 1.f;
     void Create(const char* title="Window", uint width=640, uint height=480);
+    void applySize(uint w, uint h, libdecor_configuration* c=nullptr);
 public:
     void setTitle(const char* title) { libdecor_frame_set_title(decor_frame, title); }
     void setPosition(uint x, uint y) {}  // No Wayland protocol equivalent -- permanent no-op.
-    void setSize(uint w, uint h);
+    void setSize(uint w, uint h){applySize(w,h);}
 
     Window_wayland() {Create();}
     Window_wayland(const char* title, uint width, uint height);
     virtual ~Window_wayland();
     EventType getEvent(bool wait_for_event = false);
     native_handle* getNativeHandle() const {return (native_handle*)&display;}
-
-    wl_output* output = nullptr;
-    int32_t output_scale = 1;
+    float getDisplayScale(){return scale;}
 
 #ifdef ENABLE_SHOWIMAGE
     void showImage(uint32_t* buf, uint32_t width, uint32_t height);
@@ -116,29 +115,6 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 // clang-format on
 
 //======================WAYLAND CALLBACKS=======================
-    // --- wl_output listener (integer desktop scale) ---
-    static void output_geometry(void*, wl_output*, int32_t, int32_t,
-                                int32_t, int32_t, int32_t,
-                                const char*, const char*, int32_t) {/*printf("output_geometry\n");*/}
-
-    static void output_mode(void*, wl_output*, uint32_t, int32_t, int32_t, int32_t) {}
-
-    static void output_done(void*, wl_output*) {}
-
-    static void output_scale(void* data, wl_output* output, int32_t factor) {
-        auto* w = static_cast<Window_wayland*>(data);
-        if (output == w->output) w->output_scale = factor;
-        //w->output_scale = factor;
-        //printf("scale=%d\n", factor);
-    }
-
-    static constexpr wl_output_listener output_listener = {
-        output_geometry,
-        output_mode,
-        output_done,
-        output_scale
-    };
-    // -------------------------
     // --- Seat ---
     static void seat_capabilities(void* data, wl_seat* seat, uint32_t caps);
     static void seat_name(void*, wl_seat*, const char*) {}
@@ -146,24 +122,6 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
     // ------------
 
     // --- Registry listener --- (libdecor binds xdg_wm_base itself; we bind compositor + shm + seat)
-/*
-    static void on_global(void* data, wl_registry* reg, uint32_t name, const char* iface, uint32_t version) {
-        auto* w = static_cast<Window_wayland*>(data);
-        //printf("iface: %s\n", iface);
-        if (strcmp(iface, wl_compositor_interface.name) == 0)
-            w->compositor = (wl_compositor*)wl_registry_bind(reg, name, &wl_compositor_interface, 6);  // compositor version 6
-        else if (strcmp(iface, wl_shm_interface.name) == 0)
-            w->shm = (wl_shm*)wl_registry_bind(reg, name, &wl_shm_interface, 1);
-        else if (strcmp(iface, wl_seat_interface.name) == 0) {
-            w->seat = (wl_seat*)wl_registry_bind(reg, name, &wl_seat_interface, 5);
-            wl_seat_add_listener(w->seat, &seat_listener, w);
-        }
-        else if (strcmp(iface, wl_output_interface.name) == 0) {
-            w->output = (wl_output*)wl_registry_bind(reg, name, &wl_output_interface, 2);
-            wl_output_add_listener(w->output, &output_listener, w);
-        }
-    }
-*/
     static void on_global(void* data, wl_registry* reg, uint32_t name, const char* iface, uint32_t version) {
         auto* w = static_cast<Window_wayland*>(data);
         //printf("iface: %s\n", iface);
@@ -173,7 +131,6 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         if(is(wl_compositor_interface)){ w->compositor=(wl_compositor*)bind(wl_compositor_interface,6);}
         if(is(wl_shm_interface)){        w->shm       =(wl_shm*)   bind(wl_shm_interface,   1);}
         if(is(wl_seat_interface)){       w->seat      =(wl_seat*)  bind(wl_seat_interface,  5); wl_seat_add_listener(w->seat, &seat_listener, w);}
-        if(is(wl_output_interface)){     w->output    =(wl_output*)bind(wl_output_interface,2); wl_output_add_listener(w->output, &output_listener, w);}
     }
 
     static void on_global_remove(void*, wl_registry*, uint32_t) {}
@@ -181,24 +138,19 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
     // -------------------------
 
     // --- wl_surface ---
-    static void surface_enter(void* data, wl_surface* surface, wl_output* output) {
-        auto* w = static_cast<Window_wayland*>(data);
-        w->output = output;
-        //w->UpdateScale(); // output_scale has already been received through the wl_output listener
-        printf("enter\n");
-    }
-
-    static void surface_leave(void* data, wl_surface*, wl_output* output) {
-        auto* w = static_cast<Window_wayland*>(data);
-        if (w->output == output) w->output = nullptr;
-        printf("leave\n");
-    }
+    static void surface_enter(void* data, wl_surface* surface, wl_output* output) {}
+    static void surface_leave(void* data, wl_surface* surface, wl_output* output) {}
 
     static void surface_preferred_buffer_scale(void* data, wl_surface*, int32_t factor) {
         auto* w = static_cast<Window_wayland*>(data);
-        //w->preferred_scale = factor > 0 ? factor : 1;
-        //w->updateScaleFromOutputs();
-        printf("factor=%d\n", factor);
+        float old_s = w->scale;
+        w->scale = factor;
+
+        //uint log_w = (uint)std::lround(w->shape.width  / old_s);
+        //uint log_h = (uint)std::lround(w->shape.height / old_s);
+        //uint phys_w = (uint)std::lround(log_w * factor);
+        //uint phys_h = (uint)std::lround(log_h * factor);
+        //w->applySize(phys_w, phys_h);
     }
     static void surface_preferred_buffer_transform(void*, wl_surface*, uint32_t) {}
 
@@ -228,32 +180,22 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
     // --- libdecor frame callbacks ---
     static void decor_frame_configure(libdecor_frame* frame, libdecor_configuration* configuration, void* data) {
         auto* w = static_cast<Window_wayland*>(data);
+        //printf("configure\n");
 
-        int width  = w->shape.width;
-        int height = w->shape.height;
-        libdecor_configuration_get_content_size(configuration, frame, &width, &height);  // may or may not update width/height
-        if(height<1) height=1;
-        bool size_changed = (width != w->shape.width || height != w->shape.height);
-        if (size_changed) {
-            if (w->egl_window) wl_egl_window_resize(w->egl_window, width, height, 0, 0);
-            w->eventFIFO.push(w->resizeEvent(width, height));
-        }
-
-        // Focus (and other window state) no longer comes from a raw xdg_toplevel states
-        // array -- libdecor exposes it as a bitmask via libdecor_configuration_get_window_state().
+        // onFocus event
         libdecor_window_state window_state = LIBDECOR_WINDOW_STATE_NONE;
-        if (!libdecor_configuration_get_window_state(configuration, &window_state))
-            window_state = LIBDECOR_WINDOW_STATE_NONE;  // no state info yet (can happen on first configure)
-
+        libdecor_configuration_get_window_state(configuration, &window_state);  // may update window_state
         bool active = (window_state & LIBDECOR_WINDOW_STATE_ACTIVE) != 0;
         if (active != w->has_focus) w->eventFIFO.push(w->focusEvent(active));
 
-        libdecor_state* state = libdecor_state_new(width, height);
-        libdecor_frame_commit(frame, state, configuration);
-        libdecor_state_free(state);
-        wl_surface_commit(w->surface);
-
-        w->has_configured = true;
+        // onResize event
+        float s    = w->getScale();
+        int width  = w->shape.width /s;
+        int height = w->shape.height/s;
+        libdecor_configuration_get_content_size(configuration, frame, &width, &height);  // may or may not update width/height
+        if(height<1) height=1;
+        w->applySize(width*s, height*s, configuration);
+        w->configured = true;
     }
 
     static void decor_frame_close(libdecor_frame*, void* data) {
@@ -352,10 +294,11 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 
     static void pointer_leave(void*, wl_pointer*, uint32_t, wl_surface*) {}
 
-    static void pointer_motion(void* data, wl_pointer*, uint32_t, wl_fixed_t sx, wl_fixed_t sy) {
+    static void pointer_motion(void* data, wl_pointer*, uint32_t, wl_fixed_t x, wl_fixed_t y) {
         auto* w = static_cast<Window_wayland*>(data);
+        float s=w->getScale();
         uint8_t bestBtn = w->getBtnState(1) ? 1 : w->getBtnState(2) ? 2 : w->getBtnState(3) ? 3 : 0;
-        w->eventFIFO.push(w->mouseEvent(eMOVE, (int16_t)wl_fixed_to_int(sx), (int16_t)wl_fixed_to_int(sy), bestBtn));
+        w->eventFIFO.push(w->mouseEvent(eMOVE, (int16_t)wl_fixed_to_int(x*s), (int16_t)wl_fixed_to_int(y*s), bestBtn));
     }
 
     static void pointer_button(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button, uint32_t state) {
@@ -412,16 +355,20 @@ Window_wayland::Window_wayland(const char* title, uint width, uint height) {
     Create(title, width, height);
 }
 
-void Window_wayland::setSize(uint w, uint h) {
-    if ((int)w == shape.width && (int)h == shape.height) return;
-    if (egl_window) wl_egl_window_resize(egl_window, w, h, 0, 0);
+void Window_wayland::applySize(uint w, uint h, libdecor_configuration* c) {
+    float s = getScale();
+    uint sw = w/s;
+    uint sh = h/s;
+    wl_surface_set_buffer_scale(surface, s);
 
     // Update libdecor with new content size
-    libdecor_state* state = libdecor_state_new(w, h);
-    libdecor_frame_commit(decor_frame, state, nullptr);
+    libdecor_state* state = libdecor_state_new(sw, sh);
+    libdecor_frame_commit(decor_frame, state, c);
     libdecor_state_free(state);
     wl_surface_commit(surface);
 
+    if (w == shape.width && h == shape.height) return;
+    if (egl_window) wl_egl_window_resize(egl_window, w, h, 0, 0);
     eventFIFO.push(resizeEvent(w, h));
 }
 
@@ -528,11 +475,7 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
 
     surface = wl_compositor_create_surface(compositor);
     if (!surface) { printf("ERROR: wl_compositor_create_surface failed\n"); return; }
-
     wl_surface_add_listener(surface, &surface_listener, this);
-    //wl_surface_set_buffer_scale(surface, 1);
-    //wl_surface_commit(surface);
-
     egl_window = wl_egl_window_create(surface, width, height);
 
     decor_context = libdecor_new(display, const_cast<libdecor_interface*>(&decor_iface));
@@ -545,15 +488,8 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
     libdecor_frame_set_title(decor_frame, title);
     libdecor_frame_set_app_id(decor_frame, title);
     libdecor_frame_map(decor_frame);  // triggers the first configure
-
-    // Block until the first configure+commit has happened (mirrors the old double-roundtrip).
-    while (!has_configured) {
-        if (libdecor_dispatch(decor_context, -1) < 0) {
-            printf("ERROR: libdecor_dispatch failed during initial configure\n");
-            break;
-        }
-    }
-    eventFIFO.push(resizeEvent(shape.width, shape.height));
+    while(!configured) {libdecor_dispatch(decor_context, -1);} // Wait for configure
+    //eventFIFO.push(resizeEvent(shape.width, shape.height));
 }
 
 EventType Window_wayland::getEvent(bool wait_for_event) {

@@ -51,7 +51,8 @@ int main(int argc, char *argv[]) {
     MainWindow window;                                          // Create a window
     window.setScale(0.0f);                                      // Set Window Scale (0 for system default)
     window.setTitle("GWindow (lib)");                           // Set the window title
-    window.setSize(640, 480);                                   // Set the window size (Desktop)
+    //window.setSize(640, 480);                                   // Set the window size in pixels (Desktop)
+    window.setSizeScaled(640, 480);                             // Set the window size (Desktop)
     window.setPosition(0, 0);                                   // Set the window position to top-left
     window.showKeyboard(true);                                  // Show soft-keyboard (Android)
 
@@ -73,6 +74,8 @@ int main(int argc, char *argv[]) {
         // test fullscreen mode (Desktop only)
         if(window.getKeyState(eKEY_1)) window.setFullscreen(true);
         if(window.getKeyState(eKEY_2)) window.setFullscreen(false);
+        if(window.getKeyState(eKEY_S)) window.setSize(640,480);
+
     }
     return 0;
 }
