@@ -301,6 +301,10 @@ void Window_xcb::Create(const char* title, uint width, uint height) {
 #endif
     //----------------------
 
+#ifndef ENABLE_DPIAWARE
+    setScale(1);
+#endif
+
     //----Map the window----
     xcb_map_window(xcb_connection, xcb_window);
     xcb_flush(xcb_connection);

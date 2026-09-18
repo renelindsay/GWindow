@@ -9,7 +9,8 @@
 //#define ENABLE_CLIPBOARD
 #define ENABLE_SHOWIMAGE
 #define ENABLE_CURSOR
-//#define ENABLE_FULLSCREEN
+#define ENABLE_FULLSCREEN
+#define ENABLE_DPIAWARE
 
 #include "WindowBase.h"
 #include <wayland-client.h>
@@ -83,6 +84,9 @@ public:
 
 #ifdef ENABLE_CURSOR
     void setCursor(eCursor id);
+#endif
+#ifdef ENABLE_FULLSCREEN
+    void setFullscreen(bool enable);
 #endif
 };
 //==============================================================
@@ -185,7 +189,8 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         // onFocus event
         libdecor_window_state window_state = LIBDECOR_WINDOW_STATE_NONE;
         libdecor_configuration_get_window_state(configuration, &window_state);  // may update window_state
-        bool active = (window_state & LIBDECOR_WINDOW_STATE_ACTIVE) != 0;
+        w->fullscreen = (window_state & LIBDECOR_WINDOW_STATE_FULLSCREEN) != 0; // fullscreen flag
+        bool active   = (window_state & LIBDECOR_WINDOW_STATE_ACTIVE) != 0;
         if (active != w->has_focus) w->eventFIFO.push(w->focusEvent(active));
 
         // onResize event
@@ -372,6 +377,14 @@ void Window_wayland::applySize(uint w, uint h, libdecor_configuration* c) {
     eventFIFO.push(resizeEvent(w, h));
 }
 
+#ifdef ENABLE_FULLSCREEN
+void Window_wayland::setFullscreen(bool enable) {
+    if (enable == fullscreen) return;
+    if (enable) libdecor_frame_set_fullscreen(decor_frame, nullptr);
+    else        libdecor_frame_unset_fullscreen(decor_frame);
+}
+#endif  // ENABLE_FULLSCREEN
+
 #ifdef ENABLE_SHOWIMAGE
 void Window_wayland::showImage(uint32_t* buf, uint32_t width, uint32_t height) {
     int sw = shape.width;
@@ -490,6 +503,10 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
     libdecor_frame_map(decor_frame);  // triggers the first configure
     while(!configured) {libdecor_dispatch(decor_context, -1);} // Wait for configure
     //eventFIFO.push(resizeEvent(shape.width, shape.height));
+
+#ifndef ENABLE_DPIAWARE
+    setScale(1);
+#endif
 }
 
 EventType Window_wayland::getEvent(bool wait_for_event) {

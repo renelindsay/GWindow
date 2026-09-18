@@ -12,7 +12,8 @@
 //#define ENABLE_CLIPBOARD  //1kb
 //#define ENABLE_SHOWIMAGE
 //#define ENABLE_FULLSCREEN
-#define ENABLE_CURSOR
+//#define ENABLE_CURSOR
+//#define ENABLE_DPIAWARE
 
 #include "WindowBase.h"
 #include <windowsx.h>  // Mouse
@@ -113,7 +114,10 @@ void Window_win32::Create(const char* title, uint width, uint height) {
     running      = true;
     //printf("Creating Win32 Window...\n");
 
+#ifdef ENABLE_DPIAWARE
     EnableDPIAware();
+#endif
+
     hInstance = GetModuleHandle(NULL);
 
     // Initialize the window class structure:

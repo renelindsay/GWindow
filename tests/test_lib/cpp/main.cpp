@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     //instance.DebugReport.SetFlags(14);                        // Select validation-message types (see: VkDebugReportFlagsEXT)
 
     MainWindow window;                                          // Create a window
-    window.setScale(0.0f);                                      // Set Window Scale (0 for system default)
+    //window.setScale(0.0f);                                      // Set Window Scale (0 for system default)
     window.setTitle("GWindow (lib)");                           // Set the window title
     //window.setSize(640, 480);                                   // Set the window size in pixels (Desktop)
     window.setSizeScaled(640, 480);                             // Set the window size (Desktop)
@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
 
     //VkSurfaceKHR surface = window.CreateVkSurface(instance);  // Create the Vulkan surface (requires vkUtils)
 
-    float s = window.getDisplayScale();
+    float s = window.getScale();
     printf("scale=%f\n",s);
 
     while(window.pollEvents()) {                                // Main event loop, runs until window is closed.
