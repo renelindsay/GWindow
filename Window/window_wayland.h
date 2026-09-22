@@ -4,7 +4,7 @@
 #ifndef WINDOW_WAYLAND
 #define WINDOW_WAYLAND
 
-//#define ENABLE_MULTITOUCH
+#define ENABLE_MULTITOUCH
 //#define ENABLE_GAMEPAD
 //#define ENABLE_CLIPBOARD
 #define ENABLE_SHOWIMAGE
@@ -51,6 +51,11 @@ public:
     wl_seat*     seat     = nullptr;
     wl_keyboard* keyboard = nullptr;
     wl_pointer*  pointer  = nullptr;
+
+#ifdef ENABLE_MULTITOUCH
+    wl_touch*    touch    = nullptr;
+    CMTouch      MTouch;
+#endif
 
     xkb_context* xkb_ctx        = nullptr;  // xkbcommon context (created once)
     xkb_keymap*  xkb_keymap_ptr = nullptr;  // (re)created from compositor-supplied keymap
@@ -331,11 +336,62 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         pointer_frame, pointer_axis_source, pointer_axis_stop, pointer_axis_discrete
     };
 
-    // --- wl_seat capabilities: attach/detach keyboard + pointer as they come and go ---
+#ifdef ENABLE_MULTITOUCH
+    // --- wl_touch listener ---
+    // Wayland touch coordinates are surface-local logical coordinates.
+    // Convert them to the same physical-pixel coordinates used for mouse.
+
+    static void touch_down(void* data, wl_touch*, uint32_t, uint32_t,
+                           wl_surface* surface, int32_t id,
+                           wl_fixed_t x, wl_fixed_t y) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (surface != w->surface) return;
+        float s = w->getScale();
+        float xs = wl_fixed_to_double(x) * s;
+        float ys = wl_fixed_to_double(y) * s;
+        EventType e = w->MTouch.Event(eDOWN, xs, ys, id);
+        w->eventFIFO.push(e);
+    }
+
+    static void touch_up(void* data, wl_touch*, uint32_t, uint32_t, int32_t id) {
+        auto* w = static_cast<Window_wayland*>(data);
+        auto ptr = w->MTouch.getPointer(id);
+        EventType e = w->MTouch.Event(eUP, ptr.x, ptr.y, id);
+        w->eventFIFO.push(e);
+    }
+
+    static void touch_motion(void* data, wl_touch*, uint32_t, int32_t id,
+                             wl_fixed_t x, wl_fixed_t y) {
+        auto* w = static_cast<Window_wayland*>(data);
+        float s = w->getScale();
+        float xs = wl_fixed_to_double(x) * s;
+        float ys = wl_fixed_to_double(y) * s;
+        EventType e = w->MTouch.Event(eMOVE, xs, ys, id);
+        w->eventFIFO.push(e);
+    }
+
+    static void touch_frame(void*, wl_touch*) {}
+    static void touch_cancel(void* data, wl_touch*) {
+        auto* w = static_cast<Window_wayland*>(data);
+        w->MTouch.Clear();
+    }
+    static void touch_shape(void*, wl_touch*, int32_t, wl_fixed_t, wl_fixed_t) {}
+    static void touch_orientation(void*, wl_touch*, int32_t, wl_fixed_t) {}
+
+    static constexpr wl_touch_listener touch_listener = {
+        touch_down, touch_up, touch_motion, touch_frame, touch_cancel,
+        touch_shape, touch_orientation
+    };
+#endif
+
+    // --- wl_seat capabilities: attach/detach keyboard + pointer + touch as they come and go ---
     static void seat_capabilities(void* data, wl_seat* seat, uint32_t caps) {
         auto* w = static_cast<Window_wayland*>(data);
         bool has_kbd = caps & WL_SEAT_CAPABILITY_KEYBOARD;
         bool has_ptr = caps & WL_SEAT_CAPABILITY_POINTER;
+#ifdef ENABLE_MULTITOUCH
+        bool has_touch = caps & WL_SEAT_CAPABILITY_TOUCH;
+#endif
 
         if (has_kbd && !w->keyboard) {
             w->keyboard = wl_seat_get_keyboard(seat);
@@ -352,6 +408,17 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
             wl_pointer_release(w->pointer);
             w->pointer = nullptr;
         }
+
+#ifdef ENABLE_MULTITOUCH
+        if (has_touch && !w->touch) {
+            w->touch = wl_seat_get_touch(seat);
+            wl_touch_add_listener(w->touch, &touch_listener, w);
+        } else if (!has_touch && w->touch) {
+            wl_touch_release(w->touch);
+            w->touch = nullptr;
+            w->MTouch.Clear();
+        }
+#endif
     }
 
 //==============================================================
@@ -522,6 +589,9 @@ Window_wayland::~Window_wayland() {
 
     if (keyboard)      wl_keyboard_release(keyboard);
     if (pointer)       wl_pointer_release(pointer);
+#ifdef ENABLE_MULTITOUCH
+    if (touch)         wl_touch_release(touch);
+#endif
     if (seat)          wl_seat_release(seat);
 
 #ifdef ENABLE_CURSOR

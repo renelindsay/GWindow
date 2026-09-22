@@ -58,14 +58,15 @@ class EventFIFO {
 class CMTouch {
     struct CPointer{bool active; float x; float y;};
     static const int  MAX_POINTERS = 10;  // Max 10 fingers
-    uint32_t touchID [MAX_POINTERS]{};    // finger-id lookup table (PC)
+    uint32_t touchID [MAX_POINTERS]{};    // finger-id lookup table (win32/X11)
     CPointer Pointers[MAX_POINTERS]{};
 
   public:
     int count=0;  // number of active touch-id's (Android only)
     void Clear() { memset(this, 0, sizeof(*this)); }
+    CPointer getPointer(uint8_t id) {return Pointers[id];}
 
-    // Convert desktop-style touch-id's to an android-style finger-id.
+    // Convert desktop-style touch-id's to an android-style finger-id. (Wayland matches Android)
     EventType Event_by_ID(eAction action, float x, float y, uint32_t findval, uint32_t setval) {
         for (uint32_t i = 0; i < MAX_POINTERS; ++i) {  // lookup finger-id
             if (touchID[i] == findval) {
@@ -79,11 +80,9 @@ class CMTouch {
     EventType Event(eAction action, float x, float y, uint8_t id) {
         if (id >= MAX_POINTERS) return {};  // Exit if too many fingers
         CPointer& P                   = Pointers[id];
-        if (action != eMOVE) P.active = (action == eDOWN);
-        P.x                           = x;
-        P.y                           = y;
+        if (action == eUP) P.active=false; else P={true,x,y};
         EventType e                   = {EventType::TOUCH};
-        e.touch                       = {action, x, y, id};
+        e.touch                       = {action, P.x, P.y, id};
         return e;
     }
 };
