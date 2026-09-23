@@ -16,9 +16,9 @@ class MainWindow : public GWindow {  // Without Vulkan
     void onMove       (int16_t x, int16_t y)                { printf("Window Move: x=%d y=%d\n", x, y); }
     void onFocus      (bool hasFocus)                       { printf("Window Focus: %s\n", hasFocus ? "True" : "False"); }
     void onResize     (uint16_t width, uint16_t height)     { printf("Window Resize: width=%4d height=%4d\n", width, height); }
-    void onGPadConnect(uint8_t pad, bool active)            { printf("Gamepad %d %s\n", pad, active?"connected":"disconnected"); }
-    void onGPadButton (uint8_t pad, uint8_t btn, bool down) { printf("Gamepad %d button %d %s\n", pad, btn, down?"down":"up");}
-    void onGPadAxis   (uint8_t pad, uint8_t axis, float val){ printf("Gamepad %d axis %d : %.2f\n", pad, axis, val);}
+    void onGpadConnect(uint8_t pad, bool active)            { printf("Gamepad %d %s\n", pad, active?"connected":"disconnected"); }
+    void onGpadButton (uint8_t pad, uint8_t btn, bool down) { printf("Gamepad %d button %d %s\n", pad, btn, down?"down":"up");}
+    void onGpadAxis   (uint8_t pad, uint8_t axis, float val){ printf("Gamepad %d axis %d : %.2f\n", pad, axis, val);}
     void onClose() { printf("Window Closing.\n"); }
     void onFrame() { static int i; printf("%c\r", "|/-\\"[i++/64%4]); } // spinner
 };
@@ -76,6 +76,9 @@ int main(int argc, char *argv[]) {
         if(window.getKeyState(eKEY_2)) window.setFullscreen(false);
         if(window.getKeyState(eKEY_S)) window.setSize(640,480);
 
+        // test clipboard
+        if(window.getKeyState(eKEY_C)) window.setClipboardText("Window");
+        if(window.getKeyState(eKEY_V)) printf("%s\n",window.getClipboardText());
     }
     return 0;
 }

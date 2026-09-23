@@ -6,7 +6,7 @@
 
 #define ENABLE_MULTITOUCH
 //#define ENABLE_GAMEPAD
-//#define ENABLE_CLIPBOARD
+#define ENABLE_CLIPBOARD
 #define ENABLE_SHOWIMAGE
 #define ENABLE_CURSOR
 #define ENABLE_FULLSCREEN
@@ -68,6 +68,17 @@ public:
     uint32_t         pointer_enter_serial = 0;  // serial from the most recent wl_pointer::enter
     void LoadCursorTheme();
 #endif
+
+#ifdef ENABLE_CLIPBOARD
+    wl_data_device_manager* data_device_manager = nullptr;
+    wl_data_device*         data_device         = nullptr;
+    wl_data_source*         data_source         = nullptr;
+    wl_data_offer*          selection_offer     = nullptr;
+    wl_data_offer*          pending_offer       = nullptr;  // between data_offer and selection
+    uint32_t                keyboard_enter_serial = 0;      // required by wl_data_device.set_selection
+    std::string             clipboard_mime;                 // preferred MIME from current offer
+#endif
+
     float scale = 1.f;
     void Create(const char* title="Window", uint width=640, uint height=480);
     void applySize(uint w, uint h, libdecor_configuration* c=nullptr);
@@ -92,6 +103,10 @@ public:
 #endif
 #ifdef ENABLE_FULLSCREEN
     void setFullscreen(bool enable);
+#endif
+#ifdef ENABLE_CLIPBOARD
+    virtual const char* getClipboardText() override;
+    virtual void setClipboardText(const char* str) override;
 #endif
 };
 //==============================================================
@@ -140,6 +155,9 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         if(is(wl_compositor_interface)){ w->compositor=(wl_compositor*)bind(wl_compositor_interface,6);}
         if(is(wl_shm_interface)){        w->shm       =(wl_shm*)   bind(wl_shm_interface,   1);}
         if(is(wl_seat_interface)){       w->seat      =(wl_seat*)  bind(wl_seat_interface,  5); wl_seat_add_listener(w->seat, &seat_listener, w);}
+#ifdef ENABLE_CLIPBOARD
+        if(is(wl_data_device_manager_interface)){ w->data_device_manager=(wl_data_device_manager*)bind(wl_data_device_manager_interface, 3);}
+#endif
     }
 
     static void on_global_remove(void*, wl_registry*, uint32_t) {}
@@ -247,8 +265,11 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         if (w->xkb_keymap_ptr) w->xkb_state_ptr = xkb_state_new(w->xkb_keymap_ptr);
     }
 
-    static void keyboard_enter(void* data, wl_keyboard*, uint32_t, wl_surface*, wl_array*) {
+    static void keyboard_enter(void* data, wl_keyboard*, uint32_t serial, wl_surface*, wl_array*) {
         auto* w = static_cast<Window_wayland*>(data);
+#ifdef ENABLE_CLIPBOARD
+        w->keyboard_enter_serial = serial;
+#endif
         if (!w->has_focus) w->eventFIFO.push(w->focusEvent(true));
     }
 
@@ -421,6 +442,72 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 #endif
     }
 
+#ifdef ENABLE_CLIPBOARD
+    // --- Clipboard: wl_data_offer / source / device (text only) ---
+    static void data_offer(void* data, wl_data_offer*, const char* mime) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (!strcmp(mime, "text/plain;charset=utf-8") || !strcmp(mime, "UTF8_STRING"))
+            w->clipboard_mime = mime;
+        else if (w->clipboard_mime.empty() &&
+                 (!strcmp(mime, "text/plain") || !strcmp(mime, "STRING")))
+            w->clipboard_mime = mime;
+    }
+    static void data_offer_noop_u32(void*, wl_data_offer*, uint32_t) {}
+    static constexpr wl_data_offer_listener data_offer_listener =
+        { data_offer, data_offer_noop_u32, data_offer_noop_u32 };
+
+    static void data_source_send(void* data, wl_data_source*, const char* mime, int32_t fd) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (fd < 0) return;
+        if (mime && (strstr(mime, "text/") || !strcmp(mime, "UTF8_STRING") || !strcmp(mime, "STRING"))) {
+            const char* s = w->clipboard.c_str();
+            for (size_t left = w->clipboard.size(); left; ) {
+                ssize_t n = write(fd, s, left);
+                if (n <= 0) break;
+                s += n; left -= (size_t)n;
+            }
+        }
+        ::close(fd);
+    }
+    static void data_source_cancelled(void* data, wl_data_source* src) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (w->data_source == src) { wl_data_source_destroy(src); w->data_source = nullptr; }
+    }
+    static void data_source_noop_str(void*, wl_data_source*, const char*) {}
+    static void data_source_noop(void*, wl_data_source*) {}
+    static void data_source_noop_u32(void*, wl_data_source*, uint32_t) {}
+    static constexpr wl_data_source_listener data_source_listener = {
+        data_source_noop_str, data_source_send, data_source_cancelled,
+        data_source_noop, data_source_noop, data_source_noop_u32
+    };
+
+    static void data_device_data_offer(void* data, wl_data_device*, wl_data_offer* offer) {
+        auto* w = static_cast<Window_wayland*>(data);
+        // Drop any previous offer that never became the selection (e.g. DnD).
+        if (w->pending_offer && w->pending_offer != w->selection_offer)
+            wl_data_offer_destroy(w->pending_offer);
+        w->pending_offer = offer;
+        w->clipboard_mime.clear();
+        wl_data_offer_add_listener(offer, &data_offer_listener, w);
+    }
+    static void data_device_selection(void* data, wl_data_device*, wl_data_offer* offer) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (w->selection_offer && w->selection_offer != offer)
+            wl_data_offer_destroy(w->selection_offer);
+        w->selection_offer = offer;
+        // MIME types belong to pending_offer; clear if selection is a different offer (or null).
+        if (offer != w->pending_offer) w->clipboard_mime.clear();
+        w->pending_offer = nullptr;
+    }
+    static void data_device_noop_enter(void*, wl_data_device*, uint32_t, wl_surface*, wl_fixed_t, wl_fixed_t, wl_data_offer*) {}
+    static void data_device_noop(void*, wl_data_device*) {}
+    static void data_device_noop_motion(void*, wl_data_device*, uint32_t, wl_fixed_t, wl_fixed_t) {}
+    static constexpr wl_data_device_listener data_device_listener = {
+        data_device_data_offer, data_device_noop_enter, data_device_noop,
+        data_device_noop_motion, data_device_noop, data_device_selection
+    };
+#endif  // ENABLE_CLIPBOARD
+
 //==============================================================
 
 Window_wayland::Window_wayland(const char* title, uint width, uint height) {
@@ -549,6 +636,13 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
     if (!shm)        { printf("ERROR: wl_shm not found\n");        return; }
     if (!seat)       printf("WARNING: wl_seat not found -- no keyboard/mouse input\n");
 
+#ifdef ENABLE_CLIPBOARD
+    if (data_device_manager && seat) {
+        data_device = wl_data_device_manager_get_data_device(data_device_manager, seat);
+        if (data_device) wl_data_device_add_listener(data_device, &data_device_listener, this);
+    }
+#endif
+
 #ifdef ENABLE_CURSOR
     LoadCursorTheme();
 #endif
@@ -582,6 +676,41 @@ EventType Window_wayland::getEvent(bool wait_for_event) {
     return eventFIFO.pop();
 }
 
+#ifdef ENABLE_CLIPBOARD
+void Window_wayland::setClipboardText(const char* str) {
+    clipboard = str ? str : "";
+    if (!data_device_manager || !data_device) return;
+    if (data_source) { wl_data_source_destroy(data_source); data_source = nullptr; }
+    data_source = wl_data_device_manager_create_data_source(data_device_manager);
+    if (!data_source) return;
+    wl_data_source_add_listener(data_source, &data_source_listener, this);
+    wl_data_source_offer(data_source, "text/plain;charset=utf-8");
+    wl_data_source_offer(data_source, "text/plain");
+    // keyboard_enter_serial is required by the protocol (proves we had focus).
+    wl_data_device_set_selection(data_device, data_source, keyboard_enter_serial);
+    wl_display_flush(display);
+}
+
+const char* Window_wayland::getClipboardText() {
+    if (data_source || !selection_offer || !data_device) return clipboard.c_str();
+    const char* mime = clipboard_mime.empty() ? "text/plain;charset=utf-8" : clipboard_mime.c_str();
+    int fds[2];
+    if (pipe(fds) < 0) return clipboard.c_str();
+    wl_data_offer_receive(selection_offer, mime, fds[1]);
+    ::close(fds[1]);
+    wl_display_roundtrip(display);
+    clipboard.clear();
+    char buf[1024];
+    for (;;) {
+        ssize_t n = read(fds[0], buf, sizeof(buf));
+        if (n <= 0) break;
+        clipboard.append(buf, (size_t)n);
+    }
+    ::close(fds[0]);
+    return clipboard.c_str();
+}
+#endif  // ENABLE_CLIPBOARD
+
 Window_wayland::~Window_wayland() {
     if (xkb_state_ptr)  xkb_state_unref(xkb_state_ptr);
     if (xkb_keymap_ptr) xkb_keymap_unref(xkb_keymap_ptr);
@@ -593,6 +722,14 @@ Window_wayland::~Window_wayland() {
     if (touch)         wl_touch_release(touch);
 #endif
     if (seat)          wl_seat_release(seat);
+
+#ifdef ENABLE_CLIPBOARD
+    if (pending_offer)   wl_data_offer_destroy(pending_offer);
+    if (selection_offer) wl_data_offer_destroy(selection_offer);
+    if (data_source)     wl_data_source_destroy(data_source);
+    if (data_device)     wl_data_device_release(data_device);
+    if (data_device_manager) wl_data_device_manager_destroy(data_device_manager);
+#endif
 
 #ifdef ENABLE_CURSOR
     if (cursor_surface) wl_surface_destroy(cursor_surface);
