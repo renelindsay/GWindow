@@ -28,7 +28,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         add_library(${PROJECT_NAME} STATIC ${SRC_LIST})
 
         target_include_directories(${PROJECT_NAME} PUBLIC
-            wayland
             ${WAYLAND_INCLUDE_DIRS}
             ${LIBDECOR_INCLUDE_DIRS}
             ${XKBCOMMON_INCLUDE_DIRS}
@@ -62,14 +61,15 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         link_libraries(${X11_xcb_cursor_LIB}) # Mouse cursors (libxcb-cursor.so)
 
         add_library(${PROJECT_NAME} STATIC ${SRC_LIST})
-
-        # Add LIBEVDEV for Gamepad support (requires package: libevdev-dev)
-        find_package(PkgConfig REQUIRED)
-        pkg_check_modules(LIBEVDEV REQUIRED libevdev)
-        target_include_directories(${PROJECT_NAME} PUBLIC ${LIBEVDEV_INCLUDE_DIRS})  # "/usr/include/libevdev-1.0"
-        target_link_libraries     (${PROJECT_NAME} PUBLIC ${LIBEVDEV_LIBRARIES})     # evdev
         target_compile_definitions(${PROJECT_NAME} PUBLIC VK_USE_PLATFORM_XCB_KHR)
     endif()
+
+    # Add LIBEVDEV for Gamepad support (requires package: libevdev-dev)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBEVDEV REQUIRED libevdev)
+    target_include_directories(${PROJECT_NAME} PUBLIC ${LIBEVDEV_INCLUDE_DIRS})  # "/usr/include/libevdev-1.0"
+    target_link_libraries     (${PROJECT_NAME} PUBLIC ${LIBEVDEV_LIBRARIES})     # evdev
+
 endif()
 #=================================================================
 #=============================WINDOWS=============================

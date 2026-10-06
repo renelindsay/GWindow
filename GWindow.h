@@ -15,23 +15,15 @@
 
 #pragma once
 
-#ifdef _WIN32
-    #undef  VK_USE_PLATFORM_WIN32_KHR
-    #define VK_USE_PLATFORM_WIN32_KHR
-#elif  __ANDROID__
-    #undef  VK_USE_PLATFORM_ANDROID_KHR
-    #define VK_USE_PLATFORM_ANDROID_KHR
-#elif  __linux__
-    #undef  VK_USE_PLATFORM_XCB_KHR
-    #define VK_USE_PLATFORM_XCB_KHR
-#endif
-
+// Enable/Disable features:
 #define ENABLE_MULTITOUCH
 #define ENABLE_GAMEPAD
 #define ENABLE_CLIPBOARD
 #define ENABLE_SHOWIMAGE
 #define ENABLE_FULLSCREEN
 #define ENABLE_CURSOR
+#define ENABLE_DPIAWARE
+
 
 // -------------------------------
 // keycodes.h
@@ -290,14 +282,15 @@ class EventFIFO {
 class CMTouch {
     struct CPointer{bool active; float x; float y;};
     static const int  MAX_POINTERS = 10;  // Max 10 fingers
-    uint32_t touchID [MAX_POINTERS]{};    // finger-id lookup table (PC)
+    uint32_t touchID [MAX_POINTERS]{};    // finger-id lookup table (win32/X11)
     CPointer Pointers[MAX_POINTERS]{};
 
   public:
     int count=0;  // number of active touch-id's (Android only)
     void Clear() { memset(this, 0, sizeof(*this)); }
+    CPointer getPointer(uint8_t id) {return Pointers[id];}
 
-    // Convert desktop-style touch-id's to an android-style finger-id.
+    // Convert desktop-style touch-id's to an android-style finger-id. (Wayland matches Android)
     EventType Event_by_ID(eAction action, float x, float y, uint32_t findval, uint32_t setval) {
         for (uint32_t i = 0; i < MAX_POINTERS; ++i) {  // lookup finger-id
             if (touchID[i] == findval) {
@@ -311,11 +304,9 @@ class CMTouch {
     EventType Event(eAction action, float x, float y, uint8_t id) {
         if (id >= MAX_POINTERS) return {};  // Exit if too many fingers
         CPointer& P                   = Pointers[id];
-        if (action != eMOVE) P.active = (action == eDOWN);
-        P.x                           = x;
-        P.y                           = y;
+        if (action == eUP) P.active=false; else P={true,x,y};
         EventType e                   = {EventType::TOUCH};
-        e.touch                       = {action, x, y, id};
+        e.touch                       = {action, P.x, P.y, id};
         return e;
     }
 };
@@ -338,6 +329,7 @@ struct Mouse {
 //======================Window base class=======================
 class WindowBase {
 protected:
+public:
     Mouse mouse;                                                               // mouse state
     bool keystate[256] = {};                                                   // keyboard state
     Gamepad gamepad[MAX_GAMEPADS];                                             // gamepad state
@@ -354,7 +346,7 @@ protected:
     EventType gpadAxis   (uint8_t pad, uint8_t axis, float val);               // Gamepad axis events
     EventType closeEvent ();                                                   // Window closing
 
-    float display_scale = 0.f;
+    float scale_override = 0.f;
     bool running;
     bool has_focus;                                                            // true if window has focus
     bool is_resized;                                                           // true if window has been resized
@@ -381,8 +373,8 @@ protected:
     uint width() {return shape.width; }
     uint height(){return shape.height;}
     bool resized() { bool resize = is_resized; is_resized = false; return resize; }
-    float getScale() {return (display_scale>0)? display_scale : getDisplayScale();}
-    void  setScale(float val) {display_scale = val;}
+    float getScale() {return (scale_override>0)? scale_override : getDisplayScale();}
+    void  setScale(float val=0) {scale_override = val;}
 
     virtual float getDisplayScale() {return 1.f;}
     virtual bool isFullscreen() {return fullscreen;}
@@ -460,14 +452,14 @@ constexpr std::array gamepad_layout_list = {
     "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a3  b6  b7  b8  b9  ",  // 1
     "b0  b1  b3  b4  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  a5  a4  b10 b11 ",  // 2
     "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a5  a3  a4  b8  b9  ",  // 3
-    "b1  b0  b4  b3  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  b8  b9  b10 b11 ",  // 4
-    "b2  b1  b3  b0  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a3  b6  b7  b8  b9  ",  // 5
+    "b2  b1  b3  b0  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a3  b6  b7  b8  b9  ",  // 4
+    "b1  b0  b4  b3  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  b8  b9  b10 b11 ",  // 5
     "b0  b1  b2  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a3  b6  b7  b8  b9  ",  // 6
-    "b0  b1  b3  b4  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  b8  b9  b10 b11 ",  // 7
-    "b1  b0  b4  b3  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  a5  a4  b10 b11 ",  // 8
-    "b0  b1  b2  b3  b4  b5  b7  b8  h   h   h   h   a0  a1  a2  a3  a5  a4  b9  b6  ",  // 9
-    "b2  b3  b0  b1  b4  b6  b10 b11 h   h   h   h   a0  a1  a3  a2  b5  b7  b8  b9  ",  // 10
-    "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a5  b6  b7  b8  b9  ",  // 11
+    "b1  b0  b4  b3  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  a5  a4  b10 b11 ",  // 7
+    "b0  b1  b3  b4  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  b8  b9  b10 b11 ",  // 8
+    "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a5  b6  b7  b8  b9  ",  // 9
+    "b0  b1  b2  b3  b4  b5  b7  b8  h   h   h   h   a0  a1  a2  a3  a5  a4  b9  b6  ",  // 10
+    "b2  b3  b0  b1  b4  b6  b10 b11 h   h   h   h   a0  a1  a3  a2  b5  b7  b8  b9  ",  // 11
     "b0  b1  b2  b3  b4  b5  b9  b10 h   h   h   h   a0  a1  a2  a3  a5  a4  b6  b7  ",  // 12
     "b2  b3  b0  b1  b4  b5  b8  b9  h   h   h   h   a0  a1  a3  a2  b6  b7  b10 b11 ",  // 13
     "b0  b1  b3  b4  b5  b2  b8  b9  h   h   h   h   a0  a1  a3  a4  a2  a5  b6  b7  ",  // 14
@@ -475,58 +467,63 @@ constexpr std::array gamepad_layout_list = {
     "b0  b1  b2  b3  b4  b5  b9  b10 b13 b14 b11 b12 a0  a1  a3  a4  a2  a5  b6  b7  ",  // 16
     "b0  b2  b1  b3  b4  b6  b10 b11 h   h   h   h   a0  a1  a2  a3  b5  b7  b8  b9  ",  // 17
     "b1  b0  b4  b3  b6  b7  b13 b14 h   h   h   h   a0  a1  a3  a4  b8  b9  b10 b11 ",  // 18
-    "b0  b1  b3  b4  b6  b7  b12 b13 h   h   h   h   a0  a1  a2  a3  a5  a4  b10 b11 ",  // 19
-    "b0  b1  b2  b3  b4  b5  b11 b12 h   h   h   h   a0  a1  a2  a3  b6  b7  b8  b9  ",  // 20
-    "b0  b1  b3  b2  b5  b6  b12 b13 b14 b15 b16 b17 a0  a1  a2  a3  b7  b8  b9  b10 ",  // 21
-    "b0  b1  b2  b3  b4  b5  b8  b9  h   h   h   h   a0  a1  a2  a5  a3  a4  b6  b7  ",  // 22
-    "b2  b1  b3  b0  b6  b7  b10 b11 h   h   h   h   a0  a1  a3  a2  b4  b5  b8  b9  ",  // 23
-    "b1  b0  b4  b3  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  a4  a5  b10 b11 ",  // 24
-    "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a3  a2  b6  b7  b8  b9  ",  // 25
-    "b0  b1  b2  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a3  a5  a4  b8  b9  ",  // 26
-    "b0  b1  b3  b4  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  a6  a5  b17 b11 ",  // 27
-    "b2  b1  b3  b0  b6  b7  b10 b11 h   h   h   h   a0  a1  a2  a3  b4  b5  b9  b8  ",  // 28
+    "b2  b1  b3  b0  b6  b7  b10 b11 h   h   h   h   a0  a1  a2  a3  b4  b5  b9  b8  ",  // 19
+    "b0  b1  b3  b4  b6  b7  b12 b13 h   h   h   h   a0  a1  a2  a3  a5  a4  b10 b11 ",  // 20
+    "b0  b1  b2  b3  b4  b5  b11 b12 h   h   h   h   a0  a1  a2  a3  b6  b7  b8  b9  ",  // 21
+    "b0  b1  b3  b2  b5  b6  b12 b13 b14 b15 b16 b17 a0  a1  a2  a3  b7  b8  b9  b10 ",  // 22
+    "b0  b1  b2  b3  b4  b5  b8  b9  h   h   h   h   a0  a1  a2  a5  a3  a4  b6  b7  ",  // 23
+    "b2  b1  b3  b0  b6  b7  b10 b11 h   h   h   h   a0  a1  a3  a2  b4  b5  b8  b9  ",  // 24
+    "b1  b0  b4  b3  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  a4  a5  b10 b11 ",  // 25
+    "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a3  a2  b6  b7  b8  b9  ",  // 26
+    "b0  b1  b2  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a3  a5  a4  b8  b9  ",  // 27
+    "b0  b1  b3  b4  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  a6  a5  b17 b11 ",  // 28
     "b0  b1  b2  b3  b4  b5  b7  b8  h   h   h   h   a0  a1  a2  a5  a3  a4  b14 b6  ",  // 29
     "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a4  b6  b7  b8  b9  ",  // 30
-    "b1  b0  b4  b3  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  a5  a5  b10 b11 ",  // 31
-    "b0  b1  b2  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a5  a3  a4  b6  b7  ",  // 32
-    "b1  b0  b3  b4  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a4  b8  b9  b10 b11 ",  // 33
-    "b0  b1  b2  b3  b4  b5  b6  b7  h   h   h   h   a0  a1  a2  a3  a5  a4  b9  b8  ",  // 34
-    "b0  b1  b3  b2  b4  b5  b9  b10 h   h   h   h   a0  a1  a3  a4  a2  a5  b6  b7  ",  // 35
-    "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a4  a3  -a3 b8  b9  ",  // 36
-    "b2  b3  b0  b1  b4  b5  b8  b9  h   h   h   h   a0  a1  a2  a3  b6  b7  b10 b11 ",  // 37
-    "b2  b1  b3  b0  b6  b7  b10 b11 b12 b14 b15 b13 a0  a1  a5  a2  b4  b5  b8  b9  ",  // 38
-    "b0  b1  b3  b4  b6  b7  b13 b16 h   h   h   h   a0  a1  a2  a3  b8  b9  b10 b11 ",  // 39
-    "b2  b1  b3  b0  b6  b7  b9  b10 h   h   h   h   a0  a1  a3  a2  b4  b5  b8  b11 ",  // 40
-    "b0  b1  b2  b3  b4  b6  b10 b11 h   h   h   h   a0  a1  a3  a2  b5  b7  b8  b9  ",  // 41
-    "b0  b1  b2  b3  b4  b5  b9  b10 h   h   h   h   a0  a1  a3  a4  a2  a5  b6  b7  ",  // 42
-    "b3  b4  b0  b1  b6  b7  b2  b5  h   h   h   h   a0  a1  a2  a3  b8  b9  b10 b11 ",  // 43
-    "b2  b1  b3  b0  b4  b5  b10 b11 h   h   h   h   a0  a1  a3  a2  b6  b7  b8  b9  ",  // 44
-    "b2  b3  b0  b1  b4  b6  b10 b11 h   h   h   h   a0  a1  a2  a3  b5  b7  b8  b9  ",  // 45
-    "b1  b0  b3  b2  b9  b10 b7  b8  b11 b12 b13 b14 a0  a1  a2  a3  a4  a5  b4  b6  ",  // 46
-    "b0  b1  b3  b2  b4  b5  b11 b12 b13 b14 b15 b16 a0  a1  a2  a3  b6  b7  b8  b9  ",  // 47
-    "b0  b1  b2  b3  b4  b6  b12 b11 h   h   h   h   a0  a1  a3  a2  b5  b7  b8  b10 ",  // 48
-    "b0  b1  b2  b3  b4  b5  b8  b9  h   h   h   h   a0  a1  a2  a3  a5  a4  __  b7  ",  // 49
-    "b0  b1  b2  b3  b4  b5  b11 b12 h   h   h   h   a0  a1  a3  a2  b6  b7  b8  b9  ",  // 50
-    "b0  b3  b1  b2  b4  b5  b6  b7  b8  b9  b10 b11 a0  a1  a3  a4  a2  a5  __  __  ",  // 51
-    "b0  b1  b2  b3  b4  b5  b8  b9  h   h   h   h   a0  a1  a2  a3  b6  b7  b10 b11 ",  // 52
-    "b0  b1  b2  b3  b4  b5  b9  b10 b14 b13 b14 b13 a0  a1  a3  a4  a2  a5  b6  b7  ",  // 53
-    "b1  b0  b2  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a3  b6  b7  b8  b9  ",  // 54
-    "b0  b1  b3  b2  b4  b5  b11 b12 h   h   h   h   a0  a1  a3  a4  a2  a5  b8  b9  ",  // 55
-    "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a5  b6  a4  b8  b9  ",  // 56
-    "b2  b3  b1  b0  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a3  b6  b7  b8  b9  ",  // 57
-    "b1  b2  b0  b3  b6  b7  b10 b11 h   h   h   h   a0  a1  a3  a2  b4  b5  b8  b12 ",  // 58
-    "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a3  a4  a2  b7  b8  b9  ",  // 59
-    "b2  b1  b3  b0  b6  b7  b9  b10 b12 b14 b15 b13 a0  a1  a2  a3  b4  b5  b8  b11 ",  // 60
-    "b2  b3  b4  b5  b6  b7  b13 b14 -a5 a5  -a4 a4  a0  a1  a2  a3  a7  a6  b10 b11 ",  // 61
-    "b2  b1  b3  b0  b6  b7  b10 b11 b12 b14 b15 b13 a0  a1  a2  a3  b4  b5  b9  b8  ",  // 62
-    "b0  b1  b3  b2  b4  b5  b10 b11 h   h   h   h   a0  a1  a5  a2  b6  b7  b8  b9  ",  // 63
-    "b0  b2  b1  b3  b4  b6  b10 b11 h   h   h   h   a0  a1  a2  a3  b8  b9  __  __  ",  // 64
-    "b0  b2  b1  b3  b4  b6  b11 b12 h   h   h   h   a0  a1  a2  a3  b5  b7  b9  b10 ",  // 65
-    "b2  b1  b3  b0  b4  b5  b10 b11 h   h   h   h   a0  a1  a3  a4  b6  b7  b8  b9  ",  // 66
-    "b0  b1  b2  b3  b6  b7  b10 b11 h   h   h   h   a0  a1  a3  a2  b4  b5  b8  b9  ",  // 67
-    "b1  b0  b3  b2  b4  b5  b11 b12 h   h   h   h   a0  a1  a2  a3  b6  b7  b8  b9  ",  // 68
-    "b0  b1  b2  b3  b4  b5  b8  b9  h   h   h   h   a0  a1  a3  a4  a2  a5  b6  b7  ",  // 69
-    "b0  b1  b3  b4  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a5  a7  a6  b10 b11 ",  // 70
+    "b0  b1  b2  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a5  a3  a4  b6  b7  ",  // 31
+    "b1  b0  b3  b4  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a4  b8  b9  b10 b11 ",  // 32
+    "b0  b1  b2  b3  b4  b5  b6  b7  h   h   h   h   a0  a1  a2  a3  a5  a4  b9  b8  ",  // 33
+    "b0  b1  b3  b2  b4  b5  b9  b10 h   h   h   h   a0  a1  a3  a4  a2  a5  b6  b7  ",  // 34
+    "b0  b1  b2  b3  b4  b6  b12 b11 h   h   h   h   a0  a1  a3  a2  b5  b7  b8  b10 ",  // 35
+    "b5  b3  b4  b2  b8  b9  b10 b11 h   h   h   h   a0  a1  a2  a3  b6  b7  b12 b13 ",  // 36
+    "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a4  a3  -a3 b8  b9  ",  // 37
+    "b2  b3  b0  b1  b4  b5  b8  b9  h   h   h   h   a0  a1  a2  a3  b6  b7  b10 b11 ",  // 38
+    "b2  b1  b3  b0  b6  b7  b10 b11 b12 b14 b15 b13 a0  a1  a5  a2  b4  b5  b8  b9  ",  // 39
+    "b0  b1  b3  b4  b6  b7  b13 b16 h   h   h   h   a0  a1  a2  a3  b8  b9  b10 b11 ",  // 40
+    "b2  b1  b3  b0  b6  b7  b9  b10 h   h   h   h   a0  a1  a3  a2  b4  b5  b8  b11 ",  // 41
+    "b0  b1  b2  b3  b4  b6  b10 b11 h   h   h   h   a0  a1  a3  a2  b5  b7  b8  b9  ",  // 42
+    "b0  b2  b1  b3  b10 b11 b8  b9  b4  b5  b6  b7  a0  a1  a2  a5  a3  a4  b17 b16 ",  // 43
+    "b1  b0  b3  b2  b10 b11 b8  b9  b4  b5  b6  b7  a0  a1  a2  a5  a3  a4  b17 b16 ",  // 44
+    "b0  b1  b2  b3  b4  b5  b9  b10 h   h   h   h   a0  a1  a3  a4  a2  a5  b6  b7  ",  // 45
+    "b3  b4  b0  b1  b6  b7  b2  b5  h   h   h   h   a0  a1  a2  a3  b8  b9  b10 b11 ",  // 46
+    "b2  b1  b3  b0  b4  b5  b10 b11 h   h   h   h   a0  a1  a3  a2  b6  b7  b8  b9  ",  // 47
+    "b0  b1  b2  b3  b4  b5  b9  b10 h   h   h   h   a0  a1  a4  a4  a2  a5  b6  b7  ",  // 48
+    "b2  b3  b0  b1  b4  b6  b10 b11 h   h   h   h   a0  a1  a2  a3  b5  b7  b8  b9  ",  // 49
+    "b0  b1  b2  b3  b12 b4  b15 b7  b11 b8  b10 b9  a0  a1~ a2  a3~ b13 b5  b14 b6  ",  // 50
+    "b1  b0  b3  b2  b9  b10 b7  b8  b11 b12 b13 b14 a0  a1  a2  a3  a4  a5  b4  b6  ",  // 51
+    "b0  b1  b3  b2  b4  b5  b11 b12 b13 b14 b15 b16 a0  a1  a2  a3  b6  b7  b8  b9  ",  // 52
+    "b0  b1  b2  b3  b4  b5  b8  b9  h   h   h   h   a0  a1  a2  a3  a5  a4  __  b7  ",  // 53
+    "b0  b1  b2  b3  b4  b5  b11 b12 h   h   h   h   a0  a1  a3  a2  b6  b7  b8  b9  ",  // 54
+    "b0  b3  b1  b2  b4  b5  b6  b7  b8  b9  b10 b11 a0  a1  a3  a4  a2  a5  __  __  ",  // 55
+    "b0  b1  b2  b3  b4  b5  b9  b10 b14 b13 b14 b13 a0  a1  a3  a4  a2  a5  b6  b7  ",  // 56
+    "b1  b0  b2  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a3  b6  b7  b8  b9  ",  // 57
+    "b0  b1  b3  b2  b4  b5  b11 b12 h   h   h   h   a0  a1  a3  a4  a2  a5  b8  b9  ",  // 58
+    "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a5  b6  a4  b8  b9  ",  // 59
+    "b0  b1  b2  b3  b4  b5  b8  b9  h   h   h   h   a0  a1  a2  a3  b6  b7  b10 b11 ",  // 60
+    "b2  b3  b1  b0  b4  b5  b10 b11 h   h   h   h   a0  a1  a2  a3  b6  b7  b8  b9  ",  // 61
+    "b1  b2  b0  b3  b6  b7  b10 b11 h   h   h   h   a0  a1  a3  a2  b4  b5  b8  b12 ",  // 62
+    "b1  b2  b0  b3  b4  b5  b10 b11 h   h   h   h   a0  a1  a3  a4  a2  b7  b8  b9  ",  // 63
+    "b2  b1  b3  b0  b6  b7  b9  b10 b12 b14 b15 b13 a0  a1  a2  a3  b4  b5  b8  b11 ",  // 64
+    "b0  b1  b3  b4  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a3  a2  a3  b10 b11 ",  // 65
+    "b2  b1  b3  b0  b6  b7  b10 b11 b12 b14 b15 b13 a0  a1  a2  a3  b4  b5  b9  b8  ",  // 66
+    "b0  b1  b3  b2  b4  b5  b10 b11 h   h   h   h   a0  a1  a5  a2  b6  b7  b8  b9  ",  // 67
+    "b0  b2  b1  b3  b4  b6  b10 b11 h   h   h   h   a0  a1  a2  a3  b8  b9  __  __  ",  // 68
+    "b0  b2  b1  b3  b4  b6  b11 b12 h   h   h   h   a0  a1  a2  a3  b5  b7  b9  b10 ",  // 69
+    "b2  b1  b3  b0  b4  b5  b10 b11 h   h   h   h   a0  a1  a3  a4  b6  b7  b8  b9  ",  // 70
+    "b2  b3  b4  b5  b6  b7  b13 b14 -a5 a5  -a4 a4  a0  a1  a2  a3  a7  a6  b10 b11 ",  // 71
+    "b0  b1  b2  b3  b6  b7  b10 b11 h   h   h   h   a0  a1  a3  a2  b4  b5  b8  b9  ",  // 72
+    "b1  b0  b3  b2  b4  b5  b11 b12 h   h   h   h   a0  a1  a2  a3  b6  b7  b8  b9  ",  // 73
+    "b0  b1  b2  b3  b4  b5  b8  b9  h   h   h   h   a0  a1  a3  a4  a2  a5  b6  b7  ",  // 74
+    "b0  b1  b3  b4  b6  b7  b13 b14 h   h   h   h   a0  a1  a2  a5  a7  a6  b10 b11 ",  // 75
 };
 
 static struct gamepad_index {
@@ -537,16 +534,17 @@ static struct gamepad_index {
 } gamepad_index[] = {
     {0x0079,0x18d4,3, 0},  // USB: GPD Win 2 Controller
     {0x044f,0xb326,3, 0},  // USB: Thrustmaster GP XID
-    {0x045e,0x028e,3, 0},  // USB: Be1 GC101 Xbox 360
+    {0x045e,0x028e,3, 0},  // USB: Be1 GC101 Xbox 360 Controller
     {0x045e,0x028e,5, 0},  // BT : Microsoft Xbox One Elite 2
-    {0x045e,0x02d1,3, 0},  // USB: Microsoft Xbox One
-    {0x045e,0x02dd,3, 0},  // USB: Microsoft Xbox One
+    {0x045e,0x02d1,3, 0},  // USB: Microsoft Xbox One Controller
+    {0x045e,0x02dd,3, 0},  // USB: Microsoft Xbox One Controller
+    {0x045e,0x02dd,6, 0},  // VRT: Xbox One Controller
     {0x045e,0x02e3,3, 0},  // USB: Microsoft Xbox One Elite
-    {0x045e,0x02ea,3, 0},  // USB: Microsoft Xbox One
-    {0x045e,0x02ea,6, 0},  // VRT: Xbox One S Controller
+    {0x045e,0x02ea,3, 0},  // USB: Microsoft Xbox One Controller
+    {0x045e,0x02ea,6, 0},  // VRT: Xbox One Controller
     {0x045e,0x0b00,3, 0},  // USB: Microsoft Xbox One Elite 2
     {0x045e,0x0b12,3, 0},  // USB: Microsoft Xbox Series Controller
-    {0x045e,0x0b12,6, 0},  // VRT: Microsoft Xbox One
+    {0x045e,0x0b12,6, 0},  // VRT: Microsoft Xbox One Controller
     {0x046d,0xc21d,3, 0},  // USB: Logitech F310
     {0x046d,0xc21e,3, 0},  // USB: Logitech F510
     {0x046d,0xc21f,3, 0},  // USB: Logitech F710
@@ -560,19 +558,22 @@ static struct gamepad_index {
     {0x0e6f,0x02b8,3, 0},  // USB: PDP Afterglow Xbox One Controller
     {0x0e6f,0x02c8,3, 0},  // USB: PDP Kingdom Hearts Controller
     {0x0e6f,0x02d8,3, 0},  // USB: PDP Xbox Series Controller
-    {0x0e6f,0x02ef,3, 0},  // USB: PDP Xbox Series Kinetic Wired Controller
+    {0x0e6f,0x02da,3, 0},  // USB: Logic3 Afterglow Xbox Series Controller
+    {0x0e6f,0x02ef,3, 0},  // USB: PDP Xbox Series Kinetic Controller
     {0x0e6f,0x02f1,3, 0},  // USB: PDP Xbox Atomic
     {0x0e6f,0x0301,3, 0},  // USB: Logic3 Controller
     {0x0e6f,0x0315,3, 0},  // USB: Xbox 360 Controller
     {0x0e6f,0x0401,3, 0},  // USB: Gamestop Logic3 Controller
     {0x0e6f,0x0413,3, 0},  // USB: Xbox Controller
+    {0x0e6f,0xf501,3, 0},  // USB: Logic3 Gamepad
     {0x0f0d,0x0067,3, 0},  // USB: Horipad One
     {0x0f0d,0x0150,3, 0},  // USB: Hori Fighting Commander Octa Xbox One
     {0x0f0d,0x0185,3, 0},  // USB: Hori Split Pad Fit
     {0x1038,0x1430,3, 0},  // USB: SteelSeries Stratus Duo
     {0x1038,0x1431,3, 0},  // USB: SteelSeries Stratus Duo
     {0x10f5,0x7008,6, 0},  // VRT: Turtle Beach Recon
-    {0x146b,0x0609,3, 0},  // USB: Nacon Asymmetric Wireless PS4 Controller
+    {0x10f5,0x7013,3, 0},  // USB: Turtle Beach ReactR
+    {0x146b,0x0609,3, 0},  // USB: Nacon Asymmetric PS4 Controller
     {0x1532,0x0a03,3, 0},  // USB: Razer Wildcat
     {0x1532,0x0a14,3, 0},  // USB: Razer Wolverine Ultimate Xbox
     {0x1689,0xfe00,3, 0},  // USB: Razer Sabertooth
@@ -582,6 +583,7 @@ static struct gamepad_index {
     {0x20d6,0x2005,3, 0},  // USB: PowerA Xbox Series Controller
     {0x20d6,0x200b,3, 0},  // USB: PowerA Xbox Series Controller
     {0x20d6,0x200f,3, 0},  // USB: PowerA Xbox Series Controller
+    {0x20d6,0x2065,3, 0},  // USB: PowerA Xbox Series Controller
     {0x20d6,0x2802,3, 0},  // USB: PowerA Xbox One Controller
     {0x20d6,0x4001,3, 0},  // USB: PowerA Fusion Pro 2 Controller
     {0x20d6,0x4002,3, 0},  // USB: PowerA Xbox One Spectra Infinity
@@ -590,7 +592,7 @@ static struct gamepad_index {
     {0x24c6,0x531a,3, 0},  // USB: PowerA Mini Pro Ex
     {0x24c6,0x541a,3, 0},  // USB: PowerA Xbox One Mini Controller
     {0x24c6,0x543a,3, 0},  // USB: PowerA 1428124-01
-    {0x24c6,0x581a,3, 0},  // USB: PowerA Xbox One
+    {0x24c6,0x581a,3, 0},  // USB: PowerA Xbox One Controller
     {0x24c6,0x5b02,3, 0},  // USB: Thrustmaster GPX
     {0x24c6,0x5d04,3, 0},  // USB: Razer Sabertooth
     {0x24c6,0xfafe,3, 0},  // USB: Rock Candy Xbox 360 Controller
@@ -598,13 +600,22 @@ static struct gamepad_index {
     {0x294b,0x3004,3, 0},  // USB: Snakebyte Xbox Series Controller
     {0x2dc8,0x2000,3, 0},  // USB: 8BitDo Pro 2 for Xbox
     {0x2dc8,0x2000,6, 0},  // VRT: 8BitDo Pro 2 for Xbox
+    {0x2dc8,0x2003,6, 0},  // VRT: 8BitDo Ultimate C Xbox Controller
+    {0x2dc8,0x2019,3, 0},  // USB: 8BitDo Ultimate Mini Wired Controller for Xbox
+    {0x2dc8,0x2025,3, 0},  // USB: 8BitDo Ultimate C Xbox Controller
     {0x2dc8,0x3106,3, 0},  // USB: 8BitDo Adapter 2
     {0x2dc8,0x310a,3, 0},  // USB: 8BitDo Ultimate 2C
+    {0x2dc8,0x310b,3, 0},  // USB: 8BitDo Ultimate 2
+    {0x2e24,0x1128,3, 0},  // USB: Hyperkin Competitor
     {0x2e24,0x1688,3, 0},  // USB: Hyperkin X91
     {0x2f24,0x0091,3, 0},  // USB: EasySMX ESM-9101
     {0x2f24,0x00f7,3, 0},  // USB: Mayflash Magic S Pro
-    {0x3285,0x0607,3, 0},  // USB: Nacon GC-100
+    {0x3285,0x0607,3, 0},  // USB: Nacon GC100
+    {0x3537,0x1004,3, 0},  // USB: GameSir T4 Kaleid
+    {0x3537,0x100b,3, 0},  // USB: GameSir Cyclone 2
+    {0x37d7,0x2414,3, 0},  // USB: Flydigi Direwolf 4
     {0xdead,0xbeef,6, 0},  // VRT: Hidromancer Controller
+    {0xfade,0xc001,3, 0},  // USB: Flydigi Vader 5 Pro
     {0x0079,0x1800,3, 1},  // USB: Mayflash Wii U Pro Adapter
     {0x0079,0x181a,3, 1},  // USB: Venom PS4 Arcade Joystick
     {0x0079,0x18d2,3, 1},  // USB: Mayflash Magic NS
@@ -612,7 +623,7 @@ static struct gamepad_index {
     {0x044f,0xd009,3, 1},  // USB: Thrustmaster Run N Drive PlayStation Controller
     {0x046d,0xc216,3, 1},  // USB: Logitech Dual Action
     {0x046d,0xc218,3, 1},  // USB: Logitech RumblePad 2
-    {0x046d,0xc219,3, 1},  // USB: Logitech Cordless RumblePad 2
+    {0x046d,0xc219,3, 1},  // USB: Logitech F710
     {0x046d,0xcad1,3, 1},  // USB: Logitech Chillstream
     {0x046d,0xcad2,3, 1},  // USB: Precision Controller
     {0x0738,0x3180,3, 1},  // USB: Mad Catz FightStick Alpha PS3
@@ -624,7 +635,7 @@ static struct gamepad_index {
     {0x0c12,0x0e30,3, 1},  // USB: Brook Audio Fighting Board PS3
     {0x0e6f,0x011e,3, 1},  // USB: Rock Candy PS3 Controller
     {0x0e6f,0x0128,3, 1},  // USB: PDP PS3 Rock Candy Controller
-    {0x0e6f,0x012f,3, 1},  // USB: PDP Wired PS3 Controller
+    {0x0e6f,0x012f,3, 1},  // USB: PDP PS3 Controller
     {0x0e6f,0x0130,3, 1},  // USB: EA Sports PS3 Controller
     {0x0e6f,0x0180,3, 1},  // USB: Faceoff Pro Nintendo Switch Controller
     {0x0e6f,0x0181,3, 1},  // USB: Faceoff Deluxe Pro Nintendo Switch Controller
@@ -653,8 +664,9 @@ static struct gamepad_index {
     {0x20d6,0xa713,3, 1},  // USB: PowerA Nintendo Switch Controller
     {0x20d6,0xa714,3, 1},  // USB: PowerA Spectra Nintendo Switch Controller
     {0x20d6,0xca6d,3, 1},  // USB: PowerA Pro Ex
-    {0x2185,0x0102,3, 1},  // USB: Final Fantasy XIV Online Controller
+    {0x2185,0x0102,3, 1},  // USB: FF GP1
     {0x25f0,0x83c1,3, 1},  // USB: Goodbetterbest Controller
+    {0x25f0,0x83c2,3, 1},  // USB: Gioteck VX2 PS3 Controller
     {0x2c22,0x2302,3, 1},  // USB: Qanba Obsidian Arcade Joystick PS3
     {0x2c22,0x2502,3, 1},  // USB: Qanba Dragon Arcade Joystick PS3
     {0x62dd,0xa715,3, 1},  // USB: PowerA Fusion Nintendo Switch Arcade Stick
@@ -663,43 +675,51 @@ static struct gamepad_index {
     {0x0111,0x1419,5, 2},  // BT : SteelSeries Stratus XL
     {0x0111,0x1431,5, 2},  // BT : SteelSeries Stratus Duo
     {0x03f0,0x038d,3, 2},  // USB: HyperX Clutch
+    {0x03f0,0x048d,5, 2},  // BT : HyperX Clutch
     {0x045e,0x02fd,5, 2},  // BT : Xbox One Controller
     {0x045e,0x0b13,3, 2},  // USB: Xbox Series Controller
     {0x045e,0x0b13,5, 2},  // BT : Xbox Series Controller
-    {0x045e,0x0b20,5, 2},  // BT : Xbox Wireless Controller
-    {0x045e,0x0b22,5, 2},  // BT : Xbox One Elite 2 Controller
+    {0x045e,0x0b20,5, 2},  // BT : Xbox One Controller
+    {0x045e,0x0b22,5, 2},  // BT : Xbox One Controller
     {0x0502,0x1309,3, 2},  // USB: Anbernic RG P01
     {0x05ac,0x022d,5, 2},  // BT : GameSir G4s
-    {0x05ac,0x061a,3, 2},  // USB: GameSir-T3 2.02
+    {0x05ac,0x061a,3, 2},  // USB: GameSir T3 2.02
     {0x0b05,0x7905,3, 2},  // USB: ASUS ROG Kunai 3
     {0x0b05,0x7906,5, 2},  // BT : ASUS ROG Kunai 3
     {0x0f0d,0x0196,5, 2},  // BT : Horipad Steam
     {0x0f0d,0x01ab,3, 2},  // USB: Horipad Steam
+    {0x1038,0x1441,5, 2},  // BT : SteelSeries Nimbus Cloud
     {0x11c3,0x9107,3, 2},  // USB: Be1 GC101 Controller 1.03
     {0x1532,0x0705,3, 2},  // USB: Razer Raiju Mobile
     {0x1915,0x7856,3, 2},  // USB: Uniplay U6
     {0x1949,0x0402,5, 2},  // BT : Amazon Fire Controller
+    {0x1d5a,0x1802,5, 2},  // BT : Nokia GC 5000
     {0x20bc,0x5500,3, 2},  // USB: GameSir G3w
     {0x24c6,0x891a,5, 2},  // BT : MOGA XP5X Plus
     {0x24c6,0x891b,3, 2},  // USB: BDA MOGA XP5X Plus
     {0x24c6,0x892a,5, 2},  // BT : MOGA XP5A Plus
     {0x24c6,0x892b,3, 2},  // USB: MOGA XP5A Plus
-    {0x2563,0x0526,3, 2},  // USB: Shanwan Gamepad
+    {0x2563,0x0526,3, 2},  // USB: ShanWan Gamepad
     {0x27f8,0x0bbf,3, 2},  // USB: Razer Kishi
     {0x2dc8,0x2101,3, 2},  // USB: 8BitDo Xbox One SN30 Pro
     {0x2dc8,0x2101,5, 2},  // BT : 8BitDo Xbox One SN30 Pro
-    {0x2dc8,0x3011,3, 2},  // USB: 8BitDo Ultimate Wired
-    {0x2dc8,0x3012,3, 2},  // USB: 8BitDo Ultimate Wireless
+    {0x2dc8,0x3011,3, 2},  // USB: 8BitDo Ultimate
+    {0x2dc8,0x3012,3, 2},  // USB: 8BitDo Ultimate
     {0x2dc8,0x3012,5, 2},  // BT : 8BitDo Ultimate
-    {0x2dc8,0x3013,3, 2},  // USB: 8BitDo Ultimate Wireless
+    {0x2dc8,0x3013,3, 2},  // USB: 8BitDo Ultimate
     {0x2dc8,0x3015,3, 2},  // USB: 8BitDo Ultimate C
     {0x2dc8,0x3016,3, 2},  // USB: 8BitDo Ultimate C
     {0x2dc8,0x3017,3, 2},  // USB: 8BitDo Ultimate C
     {0x2dc8,0x301b,5, 2},  // BT : 8BitDo Ultimate 2C
     {0x2dc8,0x301d,3, 2},  // USB: 8BitDo Ultimate 2C
-    {0x3285,0x0305,5, 2},  // BT : Nacon MG-X Pro
+    {0x2dc8,0x6012,3, 2},  // USB: 8BitDo Ultimate 2
+    {0x2dc8,0x6012,5, 2},  // BT : 8BitDo Ultimate 2
+    {0x3285,0x0305,5, 2},  // BT : Nacon MGX Pro
     {0x3537,0x1007,3, 2},  // USB: Anbernic RG P01
     {0x3537,0x1046,5, 2},  // BT : Anbernic RG P01
+    {0x3537,0x1058,3, 2},  // USB: GameSir K1
+    {0x3537,0x1094,3, 2},  // USB: GameSir Tegenaria Lite
+    {0x3537,0x1097,3, 2},  // USB: GameSir Kaleid Flux
     {0x358a,0x0102,3, 2},  // USB: Backbone One
     {0x358a,0x0202,3, 2},  // USB: Backbone One
     {0x358a,0x0203,3, 2},  // USB: Backbone One
@@ -721,6 +741,7 @@ static struct gamepad_index {
     {0x0c12,0x0e20,3, 3},  // USB: Brook Mars PS4 Controller
     {0x0c12,0x0e31,3, 3},  // USB: Brook Audio Fighting Board PS4
     {0x0c12,0x1e10,3, 3},  // USB: Zeroplus P4
+    {0x0c12,0x2e18,3, 3},  // USB: Zeroplus PS4 Controller
     {0x0f0d,0x0066,3, 3},  // USB: Horipad 4 PS4
     {0x0f0d,0x006a,3, 3},  // USB: Hori Real Arcade Pro 4
     {0x0f0d,0x0084,3, 3},  // USB: Hori Fighting Commander
@@ -736,84 +757,97 @@ static struct gamepad_index {
     {0x20d6,0x792a,3, 3},  // USB: BDA PS4 Fightpad
     {0x2c22,0x2300,3, 3},  // USB: Qanba Obsidian Arcade Joystick PS4
     {0x2c22,0x2500,3, 3},  // USB: Qanba Dragon Arcade Joystick PS4
+    {0x3285,0x0d16,3, 3},  // USB: Nacon Revolution 5 Pro
     {0x3285,0x0d17,3, 3},  // USB: Nacon Revolution 5 Pro
+    {0x3285,0x0d18,3, 3},  // USB: Nacon Revolution 5 Pro
     {0x3285,0x0d19,3, 3},  // USB: Nacon Revolution 5 Pro
-    {0x7545,0x0104,3, 3},  // USB: SZMY Power DS4 Wired Controller
-    {0x1002,0x9000,3, 4},  // USB: 8BitDo FC30 Pro
-    {0x2002,0x9000,3, 4},  // USB: 8BitDo NES30 Pro
-    {0x2dc8,0x2862,5, 4},  // BT : 8BitDo SN30 Pro
-    {0x2dc8,0x2865,5, 4},  // BT : 8BitDo N30 Pro 2
-    {0x2dc8,0x3101,3, 4},  // USB: 8BitDo Receiver
-    {0x2dc8,0x3102,3, 4},  // USB: 8BitDo Receiver
-    {0x2dc8,0x3103,3, 4},  // USB: 8BitDo Receiver
-    {0x2dc8,0x3104,3, 4},  // USB: 8BitDo Receiver
-    {0x2dc8,0x3810,5, 4},  // BT : 8BitDo FC30 Pro
-    {0x2dc8,0x5111,3, 4},  // USB: 8BitDo Lite SE
-    {0x2dc8,0x5111,5, 4},  // BT : 8BitDo Lite SE
-    {0x2dc8,0x6000,3, 4},  // USB: 8BitDo SF30 Pro
-    {0x2dc8,0x6000,5, 4},  // BT : 8BitDo SF30 Pro
-    {0x2dc8,0x6002,3, 4},  // USB: 8BitDo SN30 Pro Plus
-    {0x2dc8,0x6101,5, 4},  // BT : 8BitDo SN30 Pro
-    {0x2dc8,0x6102,5, 4},  // BT : 8BitDo SN30 Pro Plus
-    {0x2dc8,0x9015,3, 4},  // USB: 8BitDo N30 Pro 2
-    {0x3820,0x0009,5, 4},  // BT : 8BitDo NES30 Pro
-    {0x05ac,0x055b,3, 5},  // USB: GameSir G3w
-    {0x0e8f,0x0003,3, 5},  // USB: PS3 Controller
-    {0x0e8f,0x0008,3, 5},  // USB: Gasia PlayStation Gamepad
-    {0x0f0d,0x00aa,3, 5},  // USB: Hori Real Arcade Pro for Nintendo Switch
-    {0x11c0,0x9105,3, 5},  // USB: Torid
-    {0x11c1,0x9101,3, 5},  // USB: EasySMX
-    {0x11c2,0x9107,3, 5},  // USB: Be1 GC101 Controller 1.03
-    {0x11ff,0x3331,3, 5},  // USB: PC Controller
-    {0x145f,0x01c5,3, 5},  // USB: Trust Gamepad
-    {0x145f,0x0231,3, 5},  // USB: PS3 Controller
-    {0x20bc,0x1264,3, 5},  // USB: Betop Controller
-    {0x20e8,0x5860,3, 5},  // USB: Cideko AK08b
-    {0x2563,0x0523,3, 5},  // USB: ShanWan Gamepad
-    {0x2563,0x0575,3, 5},  // USB: Ipega PG 9099
-    {0x25f0,0x83c3,3, 5},  // USB: GT VX2
-    {0x25f0,0xc121,3, 5},  // USB: Shanwan Gioteck PS3 Controller
-    {0x2f24,0x002d,3, 5},  // USB: JYS Adapter
-    {0x7545,0x1122,3, 5},  // USB: SZMY Power Gamepad
+    {0x7545,0x0104,3, 3},  // USB: SZMY Power DS4 Controller
+    {0x05ac,0x055b,3, 4},  // USB: GameSir G3w
+    {0x0e8f,0x0003,3, 4},  // USB: PS3 Controller
+    {0x0e8f,0x0008,3, 4},  // USB: Gasia PlayStation Gamepad
+    {0x0f0d,0x00aa,3, 4},  // USB: Hori Real Arcade Pro for Nintendo Switch
+    {0x0f0d,0x00fb,3, 4},  // USB: Hori Hatsune Miku 39S
+    {0x11c0,0x9105,3, 4},  // USB: Torid
+    {0x11c1,0x9101,3, 4},  // USB: EasySMX
+    {0x11c2,0x9107,3, 4},  // USB: Be1 GC101 Controller 1.03
+    {0x11ff,0x3331,3, 4},  // USB: PC Controller
+    {0x145f,0x01c5,3, 4},  // USB: Trust Gamepad
+    {0x145f,0x0231,3, 4},  // USB: PS3 Controller
+    {0x20bc,0x1264,3, 4},  // USB: Betop Controller
+    {0x20e8,0x5860,3, 4},  // USB: Cideko AK08b
+    {0x2563,0x0523,3, 4},  // USB: ShanWan Gamepad
+    {0x2563,0x0575,3, 4},  // USB: Ipega PG 9099
+    {0x2563,0x057a,3, 4},  // USB: Cosmic Byte Ares Controller
+    {0x25f0,0x83c3,3, 4},  // USB: GT VX2
+    {0x25f0,0xc121,3, 4},  // USB: Gioteck PS3 Controller
+    {0x2f24,0x002d,3, 4},  // USB: JYS Adapter
+    {0x3285,0x0c03,3, 4},  // USB: Nacon GC100
+    {0x7545,0x1122,3, 4},  // USB: SZMY Power Gamepad
+    {0x1002,0x9000,3, 5},  // USB: 8BitDo FC30 Pro
+    {0x2002,0x9000,3, 5},  // USB: 8BitDo NES30 Pro
+    {0x2dc8,0x2862,5, 5},  // BT : 8BitDo SN30 Pro
+    {0x2dc8,0x2865,5, 5},  // BT : 8BitDo N30 Pro 2
+    {0x2dc8,0x3101,3, 5},  // USB: 8BitDo Receiver
+    {0x2dc8,0x3102,3, 5},  // USB: 8BitDo Receiver
+    {0x2dc8,0x3103,3, 5},  // USB: 8BitDo Receiver
+    {0x2dc8,0x3104,3, 5},  // USB: 8BitDo Receiver
+    {0x2dc8,0x3810,5, 5},  // BT : 8BitDo FC30 Pro
+    {0x2dc8,0x5111,3, 5},  // USB: 8BitDo Lite SE
+    {0x2dc8,0x5111,5, 5},  // BT : 8BitDo Lite SE
+    {0x2dc8,0x6000,3, 5},  // USB: 8BitDo SF30 Pro
+    {0x2dc8,0x6000,5, 5},  // BT : 8BitDo SF30 Pro
+    {0x2dc8,0x6002,3, 5},  // USB: 8BitDo SN30 Pro Plus
+    {0x2dc8,0x6101,5, 5},  // BT : 8BitDo SN30 Pro
+    {0x2dc8,0x6102,5, 5},  // BT : 8BitDo SN30 Pro Plus
+    {0x2dc8,0x9015,3, 5},  // USB: 8BitDo N30 Pro 2
+    {0x3820,0x0009,5, 5},  // BT : 8BitDo NES30 Pro
+    {0x0079,0x0122,3, 6},  // USB: ZhiXu GuliKit D
     {0x057e,0x2009,5, 6},  // BT : Nintendo Switch Pro Controller
     {0x0c45,0x4320,3, 6},  // USB: XEOX SL6556 BK
-    {0x0f0d,0x00f6,5, 6},  // BT : Horipad Switch Pro Controller
+    {0x0f0d,0x00f6,5, 6},  // BT : Horipad Switch Controller
+    {0x10f5,0x018f,5, 6},  // BT : Turtle Beach Rematch Nintendo Switch Controller
     {0x11c9,0x55f0,3, 6},  // USB: HJC Gamepad
+    {0x11ec,0xa7e1,3, 6},  // USB: Nintendo Switch
     {0x1345,0x1000,3, 6},  // USB: Genius Maxfire Grandias 12
-    {0x146b,0x0c01,3, 6},  // USB: Nacon GC 400ES
+    {0x146b,0x0c01,3, 6},  // USB: Nacon GC400ES
+    {0x146b,0x5500,3, 6},  // USB: Bigben Interactive Gamepad
     {0x1a34,0x0809,3, 6},  // USB: SL6566
     {0x4f4d,0x4554,5, 6},  // BT : Mocute 053X
     {0x5347,0x6d61,5, 6},  // BT : GameStop Gamepad
     {0x694c,0x7250,5, 6},  // BT : Nintendo Switch Controller
-    {0x0079,0x181c,3, 7},  // USB: Mobapad Chitu HD
-    {0x04e8,0x046e,5, 7},  // BT : Mocute 053X M59
-    {0x1949,0x0403,5, 7},  // BT : Ipega PG9099
-    {0x20bc,0x504d,3, 7},  // USB: Beitong A1T2 BFM
-    {0x20bc,0x5500,5, 7},  // BT : Betop AX1 BFM
-    {0x2dc8,0x3100,3, 7},  // USB: 8BitDo Adapter
-    {0x8555,0x061b,3, 7},  // USB: GameSir G4 Pro
-    {0x2dc8,0x3010,3, 8},  // USB: 8BitDo Pro 2
-    {0x2dc8,0x3820,5, 8},  // BT : 8BitDo NES30 Pro
-    {0x2dc8,0x5112,5, 8},  // BT : 8BitDo Lite 2
-    {0x2dc8,0x6006,3, 8},  // USB: 8BitDo Pro 2
-    {0x2dc8,0x6006,5, 8},  // BT : 8BitDo Pro 2
-    {0x2dc8,0x6007,3, 8},  // USB: 8BitDo Ultimate Wireless
-    {0x2dc8,0x6100,5, 8},  // BT : 8BitDo SF30 Pro
-    {0x0171,0x0419,5, 9},  // BT : Amazon Luna Controller
-    {0x0b05,0x4500,5, 9},  // BT : ASUS Gamepad
-    {0x20d6,0x0dad,5, 9},  // BT : Moga Pro
-    {0x20d6,0x6271,5, 9},  // BT : Moga Pro 2
-    {0x20d6,0x89e5,5, 9},  // BT : Moga 2
-    {0x07b5,0x0312,3,10},  // USB: Mega World Logic 3 Controller
-    {0x07b5,0x0315,3,10},  // USB: Impact
-    {0x0f30,0x0110,3,10},  // USB: Jess Tech Dual Analog Rumble
-    {0x0f30,0x0111,3,10},  // USB: Jess Tech Colour Rumble Pad
-    {0x0f30,0x0112,3,10},  // USB: Saitek P380
-    {0x044f,0xb323,3,11},  // USB: Thrustmaster Dual Trigger PlayStation Controller
-    {0x044f,0xd008,3,11},  // USB: Thrustmaster Run N Drive PlayStation Controller
-    {0x11c0,0x4001,3,11},  // USB: PS4 Controller
-    {0x1345,0x3008,3,11},  // USB: NYKO CORE
-    {0x2c22,0x2010,3,11},  // USB: Qanba Drone 2 Arcade Joystick PS5
+    {0x2dc8,0x3010,3, 7},  // USB: 8BitDo Pro 2
+    {0x2dc8,0x3820,5, 7},  // BT : 8BitDo NES30 Pro
+    {0x2dc8,0x5112,3, 7},  // USB: 8BitDo Lite 2
+    {0x2dc8,0x5112,5, 7},  // BT : 8BitDo Lite 2
+    {0x2dc8,0x6006,3, 7},  // USB: 8BitDo Pro 2
+    {0x2dc8,0x6006,5, 7},  // BT : 8BitDo Pro 2
+    {0x2dc8,0x6007,3, 7},  // USB: 8BitDo Ultimate
+    {0x2dc8,0x6009,3, 7},  // USB: 8BitDo Pro 3
+    {0x2dc8,0x6009,5, 7},  // BT : 8BitDo Pro 3
+    {0x2dc8,0x6100,5, 7},  // BT : 8BitDo SF30 Pro
+    {0x0079,0x181c,3, 8},  // USB: Mobapad Chitu HD
+    {0x04e8,0x046e,5, 8},  // BT : Mocute 053X M59
+    {0x1949,0x0403,5, 8},  // BT : Ipega PG9099
+    {0x20bc,0x504d,3, 8},  // USB: Beitong A1T2 BFM
+    {0x20bc,0x5500,5, 8},  // BT : Betop AX1 BFM
+    {0x2dc8,0x3100,3, 8},  // USB: 8BitDo Adapter
+    {0x8555,0x061b,3, 8},  // USB: GameSir G4 Pro
+    {0x044f,0xb323,3, 9},  // USB: Thrustmaster Dual Trigger PlayStation Controller
+    {0x044f,0xd008,3, 9},  // USB: Thrustmaster Run N Drive PlayStation Controller
+    {0x0c12,0x0e16,3, 9},  // USB: PS3 Controller
+    {0x11c0,0x4001,3, 9},  // USB: PS4 Controller
+    {0x1345,0x3008,3, 9},  // USB: Nyko CORE
+    {0x2c22,0x2010,3, 9},  // USB: Qanba Drone 2 Arcade Joystick PS5
+    {0x0171,0x0419,5,10},  // BT : Amazon Luna Controller
+    {0x0b05,0x4500,5,10},  // BT : ASUS Gamepad
+    {0x20d6,0x0dad,5,10},  // BT : Moga Pro
+    {0x20d6,0x6271,5,10},  // BT : Moga Pro 2
+    {0x20d6,0x89e5,5,10},  // BT : Moga 2
+    {0x07b5,0x0312,3,11},  // USB: Mega World Logic 3 Controller
+    {0x07b5,0x0315,3,11},  // USB: Impact
+    {0x0f30,0x0110,3,11},  // USB: Jess Tech Dual Analog Rumble
+    {0x0f30,0x0111,3,11},  // USB: Jess Tech Colour Rumble Pad
+    {0x0f30,0x0112,3,11},  // USB: Saitek P380
     {0x1532,0x0900,3,12},  // USB: Razer Serval
     {0x1532,0x0900,5,12},  // BT : Razer Serval
     {0x18d1,0x9400,3,12},  // USB: Google Stadia Controller
@@ -823,8 +857,8 @@ static struct gamepad_index {
     {0x06a3,0xff0c,3,13},  // USB: Saitek P2500 Force Rumble
     {0x0c12,0x0005,3,13},  // USB: InterAct AxisPad
     {0x045e,0x0202,3,14},  // USB: Xbox Controller
-    {0x045e,0x0285,3,14},  // USB: Microsoft Xbox
-    {0x045e,0x0289,3,14},  // USB: Microsoft Xbox
+    {0x045e,0x0285,3,14},  // USB: Microsoft Xbox Controller
+    {0x045e,0x0289,3,14},  // USB: Microsoft Xbox Controller
     {0xffff,0xffff,3,14},  // USB: Xbox Controller
     {0x054c,0x0268,3,15},  // USB: PS3 Controller
     {0x054c,0x0268,5,15},  // BT : PS3 Controller
@@ -841,75 +875,81 @@ static struct gamepad_index {
     {0x2dc8,0x6001,3,18},  // USB: 8BitDo SN30 Pro
     {0x2dc8,0x6101,3,18},  // USB: 8BitDo SN30 Pro
     {0x2dc8,0x9012,3,18},  // USB: 8BitDo SN30 Pro
-    {0x04b4,0x2411,3,19},  // USB: Flydigi Vader 2
-    {0x04b4,0x2412,3,19},  // USB: Flydigi Vader 2
-    {0x1915,0x0040,5,19},  // BT : Flydigi Vader 2
-    {0x0001,0x0001,5,20},  // BT : Nintendo Wii Remote
-    {0x0e6f,0x02a8,3,20},  // USB: PDP Xbox One Controller
-    {0x0f0d,0x0086,3,20},  // USB: Hori Fighting Commander Xbox 360
-    {0x057e,0x2006,6,21},  // VRT: Nintendo Switch Combined Joy-Cons
-    {0x057e,0x2008,6,21},  // VRT: Nintendo Switch Combined Joy-Cons
-    {0x694e,0x6e65,6,21},  // VRT: Nintendo Switch Combined Joy-Cons
-    {0x2e95,0x434b,3,22},  // USB: Scuf Envision
-    {0x2e95,0x434d,3,22},  // USB: Scuf Envision
-    {0x2e95,0x434e,3,22},  // USB: Scuf Envision
-    {0x04d9,0x0f16,3,23},  // USB: Sony PlayStation Controller Adapter
-    {0x0810,0x0001,3,23},  // USB: Twin PS2 Adapter
-    {0x0810,0x0003,3,23},  // USB: USB Gamepad
-    {0x2dc8,0x9000,3,24},  // USB: 8BitDo FC30 Pro
-    {0x2dc8,0x9001,3,24},  // USB: 8BitDo NES30 Pro
-    {0x06a3,0x040b,3,25},  // USB: Saitek P990 Dual Analog
-    {0x187c,0x0600,3,25},  // USB: Alienware Dual Compatible Game PlayStation Controller
-    {0x04b4,0x2412,5,26},  // BT : Flydigi APEX 4
-    {0x4f43,0x4e41,5,26},  // BT : VX Gaming Command Series
-    {0x045e,0x02e3,5,27},  // BT : Xbox One Elite
-    {0x045e,0x0b05,5,27},  // BT : Microsoft Xbox One Elite 2
-    {0x0925,0x0005,3,28},  // USB: Sony PS2 pad with SmartJoy Adapter
-    {0x0925,0x8866,3,28},  // USB: MP8866 Super Dual Box
+    {0x05e3,0x0732,3,19},  // USB: Austgame Twin Pad
+    {0x0925,0x0005,3,19},  // USB: SmartJoy PlayStation Adapter
+    {0x0925,0x8866,3,19},  // USB: MP8866 Super Dual Box
+    {0x04b4,0x2411,3,20},  // USB: Flydigi Vader 2
+    {0x04b4,0x2412,3,20},  // USB: Flydigi Vader 2
+    {0x1915,0x0040,5,20},  // BT : Flydigi Vader 2
+    {0x0001,0x0001,5,21},  // BT : Nintendo Wii Remote
+    {0x0e6f,0x02a8,3,21},  // USB: PDP Xbox One Controller
+    {0x0f0d,0x0086,3,21},  // USB: Hori Fighting Commander Xbox 360
+    {0x057e,0x2006,6,22},  // VRT: Nintendo Switch Combined Joy-Cons
+    {0x057e,0x2008,6,22},  // VRT: Nintendo Switch Combined Joy-Cons
+    {0x694e,0x6e65,6,22},  // VRT: Nintendo Switch Combined Joy-Cons
+    {0x2e95,0x434b,3,23},  // USB: Scuf Envision
+    {0x2e95,0x434d,3,23},  // USB: Scuf Envision
+    {0x2e95,0x434e,3,23},  // USB: Scuf Envision
+    {0x04d9,0x0f16,3,24},  // USB: Sony PlayStation Adapter
+    {0x0810,0x0001,3,24},  // USB: Twin PlayStation Adapter
+    {0x0810,0x0003,3,24},  // USB: USB Gamepad
+    {0x2dc8,0x9000,3,25},  // USB: 8BitDo FC30 Pro
+    {0x2dc8,0x9001,3,25},  // USB: 8BitDo NES30 Pro
+    {0x06a3,0x040b,3,26},  // USB: Saitek P990 Dual Analog
+    {0x187c,0x0600,3,26},  // USB: Alienware Dual Compatible Game PlayStation Controller
+    {0x04b4,0x2412,5,27},  // BT : Flydigi APEX 4
+    {0x4f43,0x4e41,5,27},  // BT : VX Gaming Command Series
+    {0x045e,0x02e3,5,28},  // BT : Xbox One Elite
+    {0x045e,0x0b05,5,28},  // BT : Microsoft Xbox One Elite 2
     {0x0955,0x7214,3,29},  // USB: NVIDIA Controller
     {0x0955,0x7214,5,29},  // BT : NVIDIA Controller
     {0x06a3,0xf620,3,30},  // USB: Saitek PS2700 Rumble
     {0x06a3,0xf623,3,30},  // USB: Saitek Cyborg PlayStation Controller
-    {0x2dc8,0x5112,3,31},  // USB: 8BitDo Lite 2
-    {0x1949,0x0419,3,32},  // USB: Amazon Luna Controller
-    {0x1008,0x01e5,3,33},  // USB: Anbernic Handheld
-    {0x3250,0x1002,3,34},  // USB: Atari VCS Modern Controller
-    {0x3250,0x1002,5,35},  // BT : Atari VCS Modern Controller
-    {0x06a3,0xf622,3,36},  // USB: Cyborg V3 Rumble
-    {0x056e,0x2003,3,37},  // USB: Elecom U3613M
-    {0x0b43,0x0003,3,38},  // USB: EMS Production PS2 Adapter
-    {0x05ac,0x057a,3,39},  // USB: GameSir G5
-    {0x0e8f,0x1006,3,40},  // USB: GreenAsia Electronics Controller
-    {0x0e8f,0x0012,3,41},  // USB: GreenAsia Joystick
-    {0x0f0d,0x006d,3,42},  // USB: Hori EDGE 301
-    {0x05fd,0x262a,3,43},  // USB: InterAct HammerHead FX
-    {0x0f30,0x010b,3,44},  // USB: Jess Tech GGE909 PC Recoil
-    {0x07b5,0x004f,3,45},  // USB: Mega World Logic 3 Controller
-    {0x057e,0x2009,3,46},  // USB: Nintendo Switch Pro Controller
-    {0x057e,0x0330,5,47},  // BT : Nintendo Wii U Pro Controller
-    {0x050d,0x0803,3,48},  // USB: Nostromo n45 Dual Analog
-    {0x0955,0x7210,3,49},  // USB: NVIDIA Controller
-    {0x124b,0x4d01,3,50},  // USB: NYKO Airflo EX
-    {0x2836,0x0001,5,51},  // BT : OUYA Controller
-    {0x0583,0x2050,3,52},  // USB: Padix Rockfire PlayStation Bridge
-    {0x0e6f,0x02d7,3,53},  // USB: PDP Black Camo Wired Xbox Series Controller
-    {0x0e6f,0x0185,3,54},  // USB: PDP Fightpad Pro Gamecube Controller
-    {0x054c,0x05c4,3,55},  // USB: PS4 Controller
-    {0x2c22,0x2012,3,56},  // USB: Qanba Drone 2 Arcade Joystick PS4
-    {0x0e6f,0x1113,3,57},  // USB: Saffun Controller
-    {0x06a3,0x040c,3,58},  // USB: Saitek P2900
-    {0x06a3,0xf518,3,59},  // USB: Saitek P3200 Rumble
-    {0x6666,0x0667,3,60},  // USB: Sony PlayStation Adapter
-    {0x28de,0x1201,3,61},  // USB: Steam Controller
-    {0x6666,0x8804,3,62},  // USB: Super Joy Box 5 Pro
-    {0x22ba,0x0107,3,63},  // USB: Technology Innovation PS2 Adapter
-    {0x044f,0xb303,3,64},  // USB: Thrustmaster Firestorm Dual Analog 2
-    {0x044f,0xb300,3,65},  // USB: Thrustmaster Firestorm Dual Power
-    {0x0079,0x0006,3,66},  // USB: USB gamepad
-    {0x05ac,0x3232,5,67},  // BT : VR Box Controller
-    {0x045e,0x0b0a,3,68},  // USB: Xbox One Controller
-    {0x045e,0x02e0,5,69},  // BT : Xbox One Controller
-    {0x2717,0x3144,5,70},  // BT : XiaoMi Controller
+    {0x1949,0x0419,3,31},  // USB: Amazon Luna Controller
+    {0x1008,0x01e5,3,32},  // USB: Anbernic Handheld
+    {0x3250,0x1002,3,33},  // USB: Atari VCS Modern Controller
+    {0x3250,0x1002,5,34},  // BT : Atari VCS Modern Controller
+    {0x050d,0x0803,3,35},  // USB: Belkin Nostromo N45
+    {0x1dd8,0x000b,3,36},  // USB: Buffalo BSGP1601
+    {0x06a3,0xf622,3,37},  // USB: Cyborg V3 Rumble
+    {0x056e,0x2003,3,38},  // USB: Elecom U3613M
+    {0x0b43,0x0003,3,39},  // USB: EMS Production PS2 Adapter
+    {0x05ac,0x057a,3,40},  // USB: GameSir G5
+    {0x0e8f,0x1006,3,41},  // USB: GreenAsia Electronics Controller
+    {0x0e8f,0x0012,3,42},  // USB: GreenAsia Joystick
+    {0x2e8a,0x10dd,3,43},  // USB: Hand Held Legend GC Ultimate
+    {0x2e8a,0x10df,3,44},  // USB: Hand Held Legend ProGCC
+    {0x0f0d,0x006d,3,45},  // USB: Hori EDGE 301
+    {0x05fd,0x262a,3,46},  // USB: InterAct HammerHead FX
+    {0x0f30,0x010b,3,47},  // USB: Jess Tech GGE909 PC Recoil
+    {0x4131,0x3519,3,48},  // USB: LeadJoy Xeno Plus
+    {0x07b5,0x004f,3,49},  // USB: Mega World Logic 3 Controller
+    {0x057e,0x2069,3,50},  // USB: Nintendo Switch 2 Pro Controller
+    {0x057e,0x2009,3,51},  // USB: Nintendo Switch Pro Controller
+    {0x057e,0x0330,5,52},  // BT : Nintendo Wii U Pro Controller
+    {0x0955,0x7210,3,53},  // USB: NVIDIA Controller
+    {0x124b,0x4d01,3,54},  // USB: Nyko Airflo EX
+    {0x2836,0x0001,5,55},  // BT : OUYA Controller
+    {0x0e6f,0x02d7,3,56},  // USB: PDP Black Camo Xbox Series Controller
+    {0x0e6f,0x0185,3,57},  // USB: PDP Fightpad Pro Gamecube Controller
+    {0x054c,0x05c4,3,58},  // USB: PS4 Controller
+    {0x2c22,0x2012,3,59},  // USB: Qanba Drone 2 Arcade Joystick PS4
+    {0x0583,0x2050,3,60},  // USB: Rockfire PlayStation Bridge
+    {0x0e6f,0x1113,3,61},  // USB: Saffun Controller
+    {0x06a3,0x040c,3,62},  // USB: Saitek P2900
+    {0x06a3,0xf518,3,63},  // USB: Saitek P3200 Rumble
+    {0x6666,0x0667,3,64},  // USB: Sony PlayStation Adapter
+    {0x1038,0x1412,5,65},  // BT : SteelSeries Free
+    {0x6666,0x8804,3,66},  // USB: Super Joy Box 5 Pro
+    {0x22ba,0x0107,3,67},  // USB: Technology Innovation PlayStation Adapter
+    {0x044f,0xb303,3,68},  // USB: Thrustmaster Firestorm Dual Analog 2
+    {0x044f,0xb300,3,69},  // USB: Thrustmaster Firestorm Dual Power
+    {0x0079,0x0006,3,70},  // USB: USB Gamepad
+    {0x28de,0x1201,3,71},  // USB: Valve Steam Controller
+    {0x05ac,0x3232,5,72},  // BT : VR Box Controller
+    {0x045e,0x0b0a,3,73},  // USB: Xbox One Controller
+    {0x045e,0x02e0,5,74},  // BT : Xbox One Controller
+    {0x2717,0x3144,5,75},  // BT : XiaoMi Controller
 };
 
 // For gamepads with no VID:PID, index by string name instead.
@@ -935,14 +975,14 @@ constexpr std::array gamepad_layout_list = {
     "b1  b0  b4  b3  b6  b7  b10 b11 b15 b16 b17 b18 a0  a1  a2  a3  b8  b9  b13 b12 ",  // 6
     "b0  b1  b3  b4  b6  b7  b10 b11 b15 b16 b17 b18 a0  a1  a2  a5  a3  a4  b13 b12 ",  // 7
     "b1  b2  b0  b3  b4  b5  b13 b12 b15 b16 b17 b18 a0  a1  a2  a3  b6  b7  b8  b9  ",  // 8
-    "b0  b3  b1  b4  b6  b8  b10 b11 h   h   h   h   a0  a1  a2  a3  a4  a5  b13 b12 ",  // 9
-    "b1  b0  b3  b2  b4  b5  b8  b9  b15 b16 b17 b18 a0  a1  a3  a4  a2  a5  b6  b7  ",  // 10
+    "b1  b0  b3  b2  b4  b5  b8  b9  b15 b16 b17 b18 a0  a1  a3  a4  a2  a5  b6  b7  ",  // 9
+    "b7  b1  b4  b12 b13 b14 b2  b5  h   h   h   h   a0  a1  a2  a3  b11 b6  b9  b8  ",  // 10
     "b1  b0  b3  b4  b6  b7  b10 b11 b15 b16 b17 b18 a0  a1  a2  a4  b2  b5  b8  b12 ",  // 11
     "b1  b0  b4  b3  b6  b7  b10 b11 b15 b16 b18 b17 a0  a1  a2  a3  a5  a4  b13 b12 ",  // 12
-    "b0  b1  b2  b3  b4  b5  b13 b12 b15 b16 b17 b18 a0  a1  a2  a3  b6  b7  b8  b9  ",  // 13
-    "b1  b2  b0  b3  b4  b5  b13 b12 b15 b16 b17 b18 a0  a1  a2  a5  a3  a4  b8  b9  ",  // 14
-    "b0  b1  b3  b4  b6  b7  b10 b11 b15 b16 b17 b18 a0  a1  a2  a3  b2  b5  b8  b12 ",  // 15
-    "b0  b1  b2  b3  b4  b5  b8  b9  b15 b16 b17 b18 a0  a1  a3  a4  a2  a5  b6  b7  ",  // 16
+    "b0  b1  b4  b12 b13 b14 b2  b5  h   h   h   h   a0  a1  a2  a3  b11 b6  b9  b8  ",  // 13
+    "b0  b1  b2  b3  b4  b5  b13 b12 b15 b16 b17 b18 a0  a1  a2  a3  b6  b7  b8  b9  ",  // 14
+    "b1  b2  b0  b3  b4  b5  b13 b12 b15 b16 b17 b18 a0  a1  a2  a5  a3  a4  b8  b9  ",  // 15
+    "b0  b1  b3  b4  b6  b7  b10 b11 b15 b16 b17 b18 a0  a1  a2  a3  b2  b5  b8  b12 ",  // 16
     "b0  b1  b3  b4  b6  b7  b10 b11 b15 b16 b17 b18 a0  a1  a2  a3  a5  a6  b13 b12 ",  // 17
     "b0  b1  b3  b4  b6  b7  b10 b11 b15 b16 b17 b18 a0  a1  a2  a5  a7  a6  b13 b12 ",  // 18
 };
@@ -954,7 +994,8 @@ static struct gamepad_index {
     uint8_t  inx;     // Layout index
 } gamepad_index[] = {
     {0x045e,0x028e,5, 0},  // BT : Xbox 360 Controller
-    {0x045e,0x02ea,5, 0},  // BT : Xbox One S Controller
+    {0x045e,0x02e0,5, 0},  // BT : Xbox One Controller
+    {0x045e,0x02ea,5, 0},  // BT : Xbox One Controller
     {0x045e,0x02fd,5, 0},  // BT : Xbox One Controller
     {0x045e,0x0b13,5, 0},  // BT : Xbox Series Controller
     {0x04b4,0x2411,5, 0},  // BT : Flydigi Vader 2
@@ -981,9 +1022,10 @@ static struct gamepad_index {
     {0x2dc8,0x6002,5, 6},  // BT : 8BitDo SN30 Pro Plus
     {0x02d6,0x89e5,5, 7},  // BT : GPD XD Plus
     {0x0955,0x7214,5, 7},  // BT : NVIDIA Controller
-    {0x057e,0x2009,5,13},  // BT : Nintendo Switch Pro Controller
-    {0x054c,0x0ce6,5,14},  // BT : PS5 Controller
-    {0x045e,0x02e0,5,16},  // BT : Xbox One Controller
+    {0x2dc8,0x301b,5,10},  // BT : 8BitDo Ultimate 2C
+    {0x3537,0x1116,5,13},  // BT : GameSir X5 Lite
+    {0x057e,0x2009,5,14},  // BT : Nintendo Switch Pro Controller
+    {0x054c,0x0ce6,5,15},  // BT : PS5 Controller
     {0x045e,0x0b05,5,17},  // BT : Xbox One Elite 2 Controller
     {0x2717,0x3144,5,18},  // BT : XiaoMi Controller
 };
@@ -993,9 +1035,9 @@ static struct gamepad_by_name {
     char name[17];       // Name string
     uint8_t  inx;        // Layout index
 } gamepad_by_name[] = {
-    {"Lic Pro Controll", 13},  // Lic Pro Controller
-    {"Nintendo Wireles", 13},  // Nintendo Wireless Gamepad
-    {"Wireless Gamepad", 13},  // Wireless Gamepad
+    {"Lic Pro Controll", 14},  // Lic Pro Controller
+    {"Nintendo Wireles", 14},  // Nintendo Wireless Gamepad
+    {"Wireless Gamepad", 14},  // Wireless Gamepad
     {"Google LLC Stadi",  0},  // Google Stadia Controller
     {"Logitech Gamepad",  0},  // Logitech F710
     {"Luna Gamepad",      0},  // Luna Controller
@@ -1022,11 +1064,10 @@ static struct gamepad_by_name {
     {"Amazon Game Cont",  5},  // Luna Controller
     {"HORI CO.,LTD  PA",  8},  // Hori Gem Pad 3
     {"Performance Desi",  8},  // PDP PS3 Rock Candy Controller
-    {"8BitDo NGC Modki",  9},  // 8BitDo GameCube
-    {"8Bitdo SF30 Pro",  10},  // 8BitDo SF30 Pro
+    {"8Bitdo SF30 Pro",   9},  // 8BitDo SF30 Pro
     {"Linux 4.19.172 w", 11},  // Anbernic Handheld
     {"Odin Controller",  12},  // AYN Odin
-    {"TGZ Controller",   15},  // TGZ Controller
+    {"TGZ Controller",   16},  // TGZ Controller
 };
 #endif
 
@@ -1082,6 +1123,428 @@ static const std::array<uint8_t, 20>* get_gamepad_layout(uint16_t VID, uint16_t 
 #endif
 
 // -------------------------------
+// gamepad_linux.h
+// -------------------------------
+
+#ifndef GAMEPAD_LINUX_H
+#define GAMEPAD_LINUX_H
+
+//#ifdef ENABLE_GAMEPAD
+#include <libevdev/libevdev.h>    // libevdev-dev
+#include <fcntl.h>                // open
+#include <unistd.h>               // read, close, usleep
+#include <sys/inotify.h>          // inotify
+#include <dirent.h>               // For scanning /dev/input/
+#include <sys/ioctl.h>
+#include <linux/input.h>
+
+#define MAX_BTNS 16
+#define MAX_AXIS 16
+
+class GamepadLinux {
+    WindowBase* win;              // owner window (gamepad[], eventFIFO, gpad*)
+    int inotify_fd = -1;          // gamepad inotify descriptor
+    int watch_fd   = -1;          // gamepad watch descriptor
+    
+    struct Evdev {                // gamepad handle and axis ranges
+        int fd = -1;
+        libevdev* dev = nullptr;
+        char name[256] = {};      // gamepad model name
+        char path[256] = {};      // eg. /dev/input/event240
+
+        struct Btns{
+            uint16_t BTN;         // BTN event code
+            int8_t  eBTN;         // eGamepadBtn
+        }b[MAX_BTNS]={};          // buttons
+
+        struct Axes{
+            uint16_t AXIS;        // ABS event code
+            int8_t  eAXIS;        // eGamepadAxis
+            int  min =0;          // Axis range min value
+            int  max =0;          // Axis range max value
+            int  fuzz=0;          // Noise level
+            int  flat=0;          // Dead zone
+            bool flip=false;      // Flip this axis
+            int  prev=0;          // previous value
+        }a[MAX_AXIS]={};          // axes
+
+    } evdev[MAX_GAMEPADS];
+
+    //void DetectGamepads();                                   // Detect connected gamepads
+    //bool ConnectGamepad(const char* path);                   // eg. /dev/input/event240
+    //void DisconnectGamepad(uint8_t id);                      // Disconnect gamepad by id (0-3)
+    //void MapGamepad(uint8_t id);                             // Map gamepad btn/axis layout
+    //void SetGamepadLEDs(uint8_t id, uint8_t state);          // pad-id(0-3), led-bitmask(0-15)
+    //void ReadGamepadEvents();                                // Process all gamepad events
+    //void GamepadBtnEvent(uint8_t id, input_event event);     // Button events
+    //void GamepadAxisEvent(uint8_t id, input_event event);    // Axis events
+
+    void onConnect(uint8_t pad, bool active)            {win->eventFIFO.push(win->gpadConnect(pad, active));}
+    void onButton (uint8_t pad, uint8_t btn, bool down) {win->eventFIFO.push(win->gpadButton(pad,btn,down));}
+    void onAxis   (uint8_t pad, uint8_t axis, float val){win->eventFIFO.push(win->gpadAxis(pad, axis, val));}
+
+public:
+    explicit GamepadLinux(WindowBase* window) : win(window) {}
+
+    ~GamepadLinux() {
+        for (int i = 0; i < MAX_GAMEPADS; ++i) { DisconnectGamepad(i); }
+        if (watch_fd   != -1) { inotify_rm_watch(inotify_fd, watch_fd); watch_fd=-1;}
+        if (inotify_fd != -1) { ::close(inotify_fd); inotify_fd=-1; }
+    }
+
+    void ReadGamepadEvents() {
+        DetectGamepads();
+        for (int i=0; i<MAX_GAMEPADS; ++i) {
+            Evdev&   ev  = evdev[i];
+            Gamepad& pad = win->gamepad[i];
+            if (!pad.active) continue;
+
+           int rc=0;
+            struct input_event event;
+            while ((rc=libevdev_next_event(ev.dev, LIBEVDEV_READ_FLAG_NORMAL, &event)) == 0) {
+                if (event.type == EV_KEY) { GamepadBtnEvent (i, event); } else // Button press/release
+                if (event.type == EV_ABS) { GamepadAxisEvent(i, event); }      // Analog axes and hat buttons
+            }
+            if(rc==-ENODEV) DisconnectGamepad(i);
+        }
+    }
+
+private:
+    void DetectGamepads() {
+        if (inotify_fd == -1) {  // inotify not started yet
+            // On first run, scan for already connected gamepads
+            DIR* dir = opendir("/dev/input/");
+            if(dir) {
+                dirent* entry;
+                while ((entry = readdir(dir))) {
+                    if (strncmp(entry->d_name, "event", 5) == 0) { // Look for "event#"
+                        char path[512]{};
+                        snprintf(path, sizeof(path), "/dev/input/%s", entry->d_name);
+                        ConnectGamepad(path);
+                    }
+                }
+                closedir(dir);
+            }
+            // Watch for new device connections using inotify
+            inotify_fd = inotify_init1(IN_NONBLOCK);
+            if (inotify_fd < 0) { perror("inotify_init1"); return; }
+            watch_fd = inotify_add_watch(inotify_fd, "/dev/input/", IN_CREATE);
+        }
+        // Process inotify events
+        char buffer[1024];
+        int len = read(inotify_fd, buffer, sizeof(buffer));
+        if (len > 0) {
+            for (char* ptr = buffer; ptr < buffer + len;) {
+                struct inotify_event* event = (struct inotify_event*)ptr;
+                ptr += sizeof(struct inotify_event) + event->len;
+                if (event->mask & IN_CREATE) {
+                    if (strncmp(event->name, "event", 5) == 0) {  // Look for "eventX"
+                        char path[256]{};
+                        snprintf(path, sizeof(path), "/dev/input/%s", event->name);
+                        usleep(60000);         // Allow time for the device to appear
+                        ConnectGamepad(path);  // Try to connect as Gamepad
+                    }
+                }
+            }
+        }
+    }
+
+    static void setGamepadLED(const char* devicePath, int LED_id, bool state) {
+        int fd = open(devicePath, O_WRONLY);
+        if(fd<0) return;
+        struct input_event event;
+        event.type = EV_LED;
+        event.code = LED_id;
+        event.value = state ? 1 : 0;
+        ssize_t s=write(fd, &event, sizeof(event));
+        close(fd);
+    }
+
+    void SetGamepadLEDs(uint8_t id, uint8_t state) {
+        setGamepadLED(evdev[id].path, 0, !!(state&1));
+        setGamepadLED(evdev[id].path, 1, !!(state&2));
+        setGamepadLED(evdev[id].path, 2, !!(state&4));
+        setGamepadLED(evdev[id].path, 3, !!(state&8));
+    }
+
+    bool ConnectGamepad(const char* path) {
+        int fd = open(path, O_RDONLY | O_NONBLOCK);
+        if(fd<0) return false;
+        libevdev* dev = nullptr;
+        if (libevdev_new_from_fd(fd, &dev) >= 0) {
+            if(libevdev_has_event_type(dev, EV_ABS)
+            && libevdev_has_event_type(dev, EV_KEY)
+            && libevdev_has_event_code(dev, EV_KEY, BTN_SOUTH)
+            && libevdev_has_event_code(dev, EV_KEY, BTN_NORTH)
+            && libevdev_has_event_code(dev, EV_KEY, BTN_EAST )
+            && libevdev_has_event_code(dev, EV_KEY, BTN_WEST )
+            && libevdev_has_event_code(dev, EV_ABS, ABS_X)
+            && libevdev_has_event_code(dev, EV_ABS, ABS_Y)) {  // make sure this is a gamepad
+                for (int i = 0; i < MAX_GAMEPADS; ++i) {       // find a free slot
+                    Evdev& ev = evdev[i];
+                    if(ev.fd < 0) {
+                        ev.fd = fd;
+                        ev.dev= dev;
+                        strncpy(ev.name, libevdev_get_name(dev), sizeof(ev.name)-1);  // query gamepad name
+                        strncpy(ev.path, path, sizeof(ev.path)-1);                    // get gamepad event file path
+                        //printf("Gamepad %d found: %s at %s\n", i, ev.name, path);
+                        MapGamepad(i);           // Detect gamepad button layout
+                        SetGamepadLEDs(i,1<<i);  // Set Gamepad LEDs to indicate which slot its in.
+                        onConnect(i, true);
+                        return true;
+                    }
+                }
+            }
+            libevdev_free(dev); ::close(fd);
+        } else ::close(fd);
+        return false;
+    }
+
+    void DisconnectGamepad(uint8_t id) {
+        Evdev& ev = evdev[id];
+        if(ev.fd==-1) return;
+        onConnect(id, false);
+        //SetGamepadLEDs(id, 0);  // Does not restore blinking :(
+        libevdev_free(ev.dev);
+        ::close(ev.fd);
+        memset(&ev, 0, sizeof(ev));
+        ev.fd = -1;
+        ev.dev = 0;
+        ev.name[0] = '\0';
+        ev.path[0] = '\0';
+        //printf("Gamepad %d disconnected.\n", id);
+    }
+
+    void MapGamepad(uint8_t id) {
+        Evdev& pad = evdev[id];
+        auto dev = pad.dev;
+        const char* name = libevdev_get_name(dev);
+        uint BUS=libevdev_get_id_bustype(dev);
+        uint VID=libevdev_get_id_vendor(dev);
+        uint PID=libevdev_get_id_product(dev);
+        printf("Gamepad %d: \"%s\"\n",id , name);
+        //printf("bus:%#x vendor:%#x product:%#x\n",bus, VID, PID);
+        //-----------------------------------------------------------------
+        int hatx_inx=0;  // HAT0X axis-index
+        int haty_inx=0;  // HAT0Y axis-index
+        int axis_cnt=0;  // not used
+
+        // get the button event code list
+        for (int code=0,b=0; code<KEY_MAX && b<MAX_BTNS; code++)
+            if(libevdev_has_event_code(dev, EV_KEY, code)) pad.b[b++].BTN=code;
+
+        // get axis event code and limits
+        for (int code=0,a=0; code<KEY_MAX && a<MAX_AXIS; code++) {
+            if(libevdev_has_event_code(dev, EV_ABS, code)) {
+                if(code==ABS_HAT0X) hatx_inx=a;  // save the hatx index for later
+                if(code==ABS_HAT0Y) haty_inx=a;  // save the haty index for later
+                auto& axis = pad.a[a++];
+                axis.AXIS = code;
+                axis.min  = libevdev_get_abs_minimum(dev, code);  // axis min value
+                axis.max  = libevdev_get_abs_maximum(dev, code);  // axis max value
+                axis.fuzz = libevdev_get_abs_fuzz   (dev, code);  // noise level
+                axis.flat = libevdev_get_abs_flat   (dev, code);  // dead zone
+            }
+            axis_cnt=a;
+        }
+        //for(auto& line : gamepad_layouts){for(uint8_t val : line) printf("%02X ", val); printf("\n");}
+
+        auto* p_layout = get_gamepad_layout(VID, PID, BUS, name);  // Find layout by gamepad ID
+
+        if(p_layout) {  // Gamepad found. Decode layout tokens.
+            int8_t eBTN [] = {1,2,3,4,5,6,7,8,9,10,11,12,-1,-2,-3,-4,-5,-6,13,14};  // pos-to-eBTN
+            int8_t eAXIS[] = {0,0,0,0,0,0,0,0,0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 0, 0};  // pos-to-eAxis
+            auto layout = *p_layout;
+            for(int i=0; i<layout.size(); ++i) {
+                uint8_t code = layout[i];
+                //printf("%02x ",code);
+                if(code==0xff) continue;                         // not mapped
+                uint8_t num = code &0x1F;                        // extract number
+                bool flip   = code &0x80;                        // extract flip flag
+                bool isBtn  =!(code&0x60);                       // No flag for button
+                bool isHat  = code &0x40;                        // extract hat flag
+                bool isAxis = code &0x20;                        // extract axis flag
+                if(isBtn)  pad.b[num].eBTN  = eBTN[i];           // button event code to eGamepadBtn map
+                if(isAxis) pad.a[num].eAXIS = eAXIS[i];          // axis event code to eGamepadAxis map
+                if(isAxis) pad.a[num].flip  = flip;              // flip axis
+                if(isHat && i==8)  pad.a[hatx_inx].flip = flip;  // flip HAT0X
+                if(isHat && i==10) pad.a[haty_inx].flip = flip;  // flip HAT0Y
+                //printf("i=%d num=%d isBtn=%d isHat=%d isAxis=%d filp=%d\n",i ,num, isBtn, isHat, isAxis, flip);
+            }
+        } else {  // Gamepad not listed.  Use heuristics to guess layout.
+            bool hasHAT=!!(hatx_inx & haty_inx);
+            bool hasTrigger=false;
+
+            auto& a = pad.a;
+            a[0].eAXIS = eAXIS_LX;                                                                                 // left stick X (always first listed axis)
+            a[1].eAXIS = eAXIS_LY;                                                                                 // left stick Y (always second listed axis)
+            for(auto& ax : a) if(ax.AXIS==ABS_HAT0X) {ax.eAXIS=7; hasHAT=true; break;}                             // Hat X (always ABS_HAT0X, or a button)
+            for(auto& ax : a) if(ax.AXIS==ABS_HAT0Y) {ax.eAXIS=8; hasHAT=true; break;}                             // Hat Y (always ABS_HAT0Y, or a button)
+            for(auto& ax : a) if(!ax.eAXIS && ax.min==a[0].min && ax.max==a[0].max) {ax.eAXIS=eAXIS_RX; break;}    // right stick X (min/max should match left stick)
+            for(auto& ax : a) if(!ax.eAXIS && ax.min==a[0].min && ax.max==a[0].max) {ax.eAXIS=eAXIS_RY; break;}    // right stick Y
+            for(auto& ax : a) if(!ax.eAXIS && ax.min==0 && ax.max>1) {ax.eAXIS=eAXIS_TL; hasTrigger=true; break;}  // left trigger (Usually has min=0)
+            for(auto& ax : a) if(!ax.eAXIS && ax.min==0 && ax.max>1) {ax.eAXIS=eAXIS_TR; hasTrigger=true; break;}  // right trigger
+            //for(int i=0; i<axis_cnt; ++i) { auto& ax = a[i]; printf("i:%d  AXIS=%2d eAXIS=%2d  min=%5d  max=%5d  fuzz=%5d  flat=%5d  flip=%d\n", i, ax.AXIS, ax.eAXIS, ax.min, ax.max, ax.fuzz, ax.flat, ax.flip);}
+
+            bool HID_style      = ( hasHAT &&  hasTrigger);  // HID and XInput compliant (XBox)
+            bool Nintendo_style = ( hasHAT && !hasTrigger);  // Nintendo uses button triggers
+            bool Sony_style     = (!hasHAT &&  hasTrigger);  // Sony uses DPad instead of HAT
+
+            auto& btns = pad.b;
+            if(HID_style) {
+                for(auto& b : btns) {
+                    if(b.BTN==BTN_A)       b.eBTN=eBTN_A;
+                    if(b.BTN==BTN_B)       b.eBTN=eBTN_B;
+                    if(b.BTN==BTN_X)       b.eBTN=eBTN_X;
+                    if(b.BTN==BTN_Y)       b.eBTN=eBTN_Y;
+                    if(b.BTN==BTN_TL)      b.eBTN=eBTN_TL;
+                    if(b.BTN==BTN_TR)      b.eBTN=eBTN_TR;
+                    if(b.BTN==BTN_THUMBL)  b.eBTN=eBTN_THUMBL;
+                    if(b.BTN==BTN_THUMBR)  b.eBTN=eBTN_THUMBR;
+                    if(b.BTN==BTN_SELECT)  b.eBTN=eBTN_SELECT;
+                    if(b.BTN==BTN_START)   b.eBTN=eBTN_START;
+                }
+            }
+
+            if(Nintendo_style) {
+                for(auto& b : btns) {
+                    if(b.BTN==0x130) b.eBTN=eBTN_A;
+                    if(b.BTN==0x131) b.eBTN=eBTN_B;
+                    if(b.BTN==0x132) b.eBTN=eBTN_X;
+                    if(b.BTN==0x133) b.eBTN=eBTN_Y;
+                    if(b.BTN==0x134) b.eBTN=eBTN_TL;
+                    if(b.BTN==0x135) b.eBTN=eBTN_TR;
+                    if(b.BTN==0x136) b.eBTN=-eAXIS_TL;  // button trigger
+                    if(b.BTN==0x137) b.eBTN=-eAXIS_TR;  // button trigger
+                    if(b.BTN==0x13a) b.eBTN=eBTN_THUMBL;
+                    if(b.BTN==0x13b) b.eBTN=eBTN_THUMBR;
+                    if(b.BTN==0x138) b.eBTN=eBTN_SELECT;
+                    if(b.BTN==0x139) b.eBTN=eBTN_START;
+                }
+            }
+
+            if(Sony_style) {  // untested
+                for(auto& b : btns) {
+                    if(b.BTN==0x130) b.eBTN=eBTN_A;
+                    if(b.BTN==0x131) b.eBTN=eBTN_B;
+                    if(b.BTN==0x132) b.eBTN=eBTN_X;
+                    if(b.BTN==0x133) b.eBTN=eBTN_Y;
+                    if(b.BTN==0x134) b.eBTN=eBTN_TL;
+                    if(b.BTN==0x135) b.eBTN=eBTN_TR;
+                    if(b.BTN==0x13d) b.eBTN=eBTN_THUMBL;
+                    if(b.BTN==0x13e) b.eBTN=eBTN_THUMBR;
+                    if(b.BTN==0x138) b.eBTN=eBTN_SELECT;
+                    if(b.BTN==0x139) b.eBTN=eBTN_START;
+                }
+            }
+
+            for(auto& b : btns) {  // DPad buttons (Sony?)
+                if(b.BTN==BTN_DPAD_UP)    b.eBTN=eDPAD_UP;
+                if(b.BTN==BTN_DPAD_DOWN)  b.eBTN=eDPAD_DOWN;
+                if(b.BTN==BTN_DPAD_LEFT)  b.eBTN=eDPAD_LEFT;
+                if(b.BTN==BTN_DPAD_RIGHT) b.eBTN=eDPAD_RIGHT;
+            }
+
+            //for(int i=0; i<MAX_BTNS; ++i) {auto& b = pad.map.b[i]; printf("BTN=%d eBTN=%d\n", b.BTN, b.eBTN);}
+        }
+    }
+
+    void GamepadBtnEvent(uint8_t id, input_event event) {
+        auto& ev = evdev[id];
+        uint keycode = event.code;
+        //printf("keycode=%d (0x%3x) %d\n", keycode, keycode, event.value);
+        if(event.value>1) return;  // ignore repeats (0=up 1=down 2=repeat)
+        for(auto& b : ev.b) if(keycode==b.BTN) {
+            if(b.eBTN>0) onButton(id, b.eBTN, event.value);
+            if(b.eBTN<0) onAxis  (id,-b.eBTN, event.value);
+        }
+    }
+
+    void GamepadAxisEvent(uint8_t id, input_event event) {
+        Gamepad& pad = win->gamepad[id];
+        Evdev&   ev  = evdev[id];
+
+        //------------------------------------------------------------------------------
+        auto find_axis = [&](uint axiscode) -> Evdev::Axes& {
+            for(auto& a : ev.a) if(axiscode==a.AXIS) return a;
+            return ev.a[0];
+        };
+
+        auto Hat = [&](int val, int btnNeg, int btnPos) { // convert hat axis values to button events
+            if((val!=-1) && ( pad.buttons[btnNeg])) onButton(id, btnNeg, 0);
+            if((val!= 1) && ( pad.buttons[btnPos])) onButton(id, btnPos, 0);
+            if((val==-1) && (!pad.buttons[btnNeg])) onButton(id, btnNeg, 1);
+            if((val== 1) && (!pad.buttons[btnPos])) onButton(id, btnPos, 1);
+        };
+
+        auto isFuzz = [](int value, auto& a) -> bool { // detect fuzz events
+            int delta = abs(a.prev - value);
+            if(delta<a.fuzz) return true;
+            a.prev = value;
+            return false;
+        };
+
+        auto Trigger = [](int value, auto& a) -> float { // Apply dead-zone, normalize
+            int val   = std::max(value-a.min-a.flat,0);
+            int range = std::max(a.max-a.min-a.flat,1);
+            return val / (float)range;
+        };
+
+        auto Thumb = [](int value, auto& a) -> float { // Apply dead-zone, normalize
+            int center = (a.min + a.max) / 2;
+            int centered = value - center;
+            int sign  = centered<0 ? -1:1;
+            int val   = std::max(std::abs(centered) - a.flat, 0);
+            int range = a.max - center - a.flat;
+            return (val / (float)range) * sign;
+        };
+        //------------------------------------------------------------------------------
+
+        auto& a = find_axis(event.code);
+        int val = a.flip ? -event.value : event.value;
+        if(event.code == ABS_HAT0X) {Hat(val, eDPAD_LEFT, eDPAD_RIGHT); return;}
+        if(event.code == ABS_HAT0Y) {Hat(val, eDPAD_UP,   eDPAD_DOWN);  return;}
+        if(event.code > 10) return;         // Ignore HAT1+
+
+        if(isFuzz(event.value, a)) return;  // defuzz
+        bool isTrigger = (a.eAXIS==eAXIS_TL || a.eAXIS==eAXIS_TR);
+        float fval = isTrigger? Trigger(event.value, a)
+                              : Thumb  (event.value, a);
+
+        if(pad.axes[a.eAXIS] == fval) return;  // deadzone
+        if(a.eAXIS==eAXIS_LY || a.eAXIS==eAXIS_RY) fval=-fval; // flip y axis
+        if(a.flip) fval=-fval;
+        onAxis(id, a.eAXIS, fval);
+    }
+
+    /*
+    // eg. SetGamepadRumble(0, 20000, 0);
+    void SetGamepadRumble(int index, uint16_t weak, uint16_t strong) {  // TODO
+        if (index < 0 || index >= MAX_GAMEPADS || evdev[index].fd < 0) return;
+
+        struct ff_effect effect = {};
+        effect.type = FF_RUMBLE;
+        effect.id = -1;
+        effect.u.rumble.strong_magnitude = strong;
+        effect.u.rumble.weak_magnitude = weak;
+        if (ioctl(evdev[index].fd, EVIOCSFF, &effect) < 0) return;
+
+        struct input_event play = {};
+        play.type = EV_FF;
+        play.code = effect.id;
+        play.value = 1;
+
+        write(evdev[index].fd, &play, sizeof(play));  // Start rumble
+        usleep(500000);                                  // Let it run for 500ms
+        ioctl(evdev[index].fd, EVIOCRMFF, effect.id); // Remove the effect
+    }
+    */
+};
+
+//#endif  // ENABLE_GAMEPAD
+#endif  // GAMEPAD_LINUX_H
+
+// -------------------------------
 // window_win32.h
 // -------------------------------
 
@@ -1099,7 +1562,8 @@ static const std::array<uint8_t, 20>* get_gamepad_layout(uint16_t VID, uint16_t 
 //#define ENABLE_CLIPBOARD  //1kb
 //#define ENABLE_SHOWIMAGE
 //#define ENABLE_FULLSCREEN
-#define ENABLE_CURSOR
+//#define ENABLE_CURSOR
+//#define ENABLE_DPIAWARE
 
 #include <windowsx.h>  // Mouse
 #include <assert.h>
@@ -1199,7 +1663,10 @@ void Window_win32::Create(const char* title, uint width, uint height) {
     running      = true;
     //printf("Creating Win32 Window...\n");
 
+#ifdef ENABLE_DPIAWARE
     EnableDPIAware();
+#endif
+
     hInstance = GetModuleHandle(NULL);
 
     // Initialize the window class structure:
@@ -1670,13 +2137,6 @@ void Window_win32::EnableDPIAware() {
 #include <xcb/xcb_cursor.h>       // mouse cursor icons
 #endif
 #ifdef ENABLE_GAMEPAD
-#include <libevdev/libevdev.h>    // libevdev-dev
-#include <fcntl.h>                // gamepad open
-#include <unistd.h>               // gamepad read
-#include <sys/inotify.h>          // gamepad inotify
-#include <dirent.h>               // For scanning the /dev/input/ directory
-#include <sys/ioctl.h>
-#include <linux/input.h>
 #endif
 #ifdef ENABLE_FULLSCREEN
 #include <xcb/xcb.h>
@@ -1746,43 +2206,7 @@ class Window_xcb : public WindowBase {
     //------------------
     //---- Gamepad ----
 #ifdef ENABLE_GAMEPAD
-#define MAX_BTNS 16
-#define MAX_AXIS 16
-
-    int inotify_fd = -1;          // gamepad inotify descriptor
-    int watch_fd   = -1;          // gamepad watch descriptor
-    struct Evdev {                // gamepad handle and axis ranges
-        int fd = -1;
-        libevdev* dev = nullptr;
-        char name[256] = {};      // gamepad model name
-        char path[256] = {};      // eg. /dev/input/event240
-
-        struct Btns{
-            uint16_t BTN;         // BTN event code
-            int8_t  eBTN;         // eGamepadBtn
-        }b[MAX_BTNS]={};          // buttons
-
-        struct Axes{
-            uint16_t AXIS;        // ABS event code
-            int8_t  eAXIS;        // eGamepadAxis
-            int  min =0;          // Axis range min value
-            int  max =0;          // Axis range max value
-            int  fuzz=0;          // Noise level
-            int  flat=0;          // Dead zone
-            bool flip=false;      // Flip this axis
-            int  prev=0;          // previous value
-        }a[MAX_AXIS]={};          // axes
-
-    } evdev[MAX_GAMEPADS];
-
-    void DetectGamepads();                                   // Detect connected gamepads
-    bool ConnectGamepad(const char* path);                   // eg. /dev/input/event240
-    void DisconnectGamepad(uint8_t id);                      // Disconnect gamepad by id (0-3)
-    void MapGamepad(uint8_t id);                             // Map gamepad btn/axis layout
-    void SetGamepadLEDs(uint8_t id, uint8_t state);          // pad-id(0-3), led-bitmask(0-15)
-    void ReadGamepadEvents();                                // Process all gamepad events
-    void GamepadBtnEvent(uint8_t id, input_event event);     // Button events
-    void GamepadAxisEvent(uint8_t id, input_event event);    // Axis events
+    GamepadLinux gpad{this};
 #endif
     //------------------
 
@@ -1827,14 +2251,14 @@ public:
     virtual const char* getClipboardText();
     virtual void setClipboardText(const char* str);
 #else
-    void InitClipboard(){};
+    void InitClipboard(){}
 #endif
 
 
 
 };
 //==============================================================
-#endif
+#endif  // WINDOW_XCB
 
 #ifdef GWINDOW_IMPLEMENTATION
 
@@ -1858,7 +2282,7 @@ void Window_xcb::Create(const char* title, uint width, uint height) {
     shape.height = height;
     running      = true;
 
-    //printf("Creating XCB-Window...\n");
+    printf("Creating XCB-Window...\n");
 
     // --Init Connection-- XCB only
     // int scr;
@@ -1941,6 +2365,10 @@ void Window_xcb::Create(const char* title, uint width, uint height) {
 #endif
     //----------------------
 
+#ifndef ENABLE_DPIAWARE
+    setScale(1);
+#endif
+
     //----Map the window----
     xcb_map_window(xcb_connection, xcb_window);
     xcb_flush(xcb_connection);
@@ -1965,11 +2393,6 @@ Window_xcb::~Window_xcb() {
     int cnt = sizeof(cursors) / sizeof(cursors[0]);
     for(int i=0; i<cnt; ++i) xcb_free_cursor(xcb_connection, cursors[i]);
     xcb_cursor_context_free(cursor_ctx);
-#endif
-#ifdef ENABLE_GAMEPAD
-    for (int i = 0; i < MAX_GAMEPADS; ++i) { DisconnectGamepad(i); }
-    if (watch_fd   != -1) { inotify_rm_watch(inotify_fd, watch_fd); watch_fd=-1;}
-    if (inotify_fd != -1) { ::close(inotify_fd); inotify_fd=-1; }
 #endif
     xcb_disconnect(xcb_connection);
     XFree(k_ctx);  // xkb keyboard
@@ -2192,7 +2615,7 @@ EventType Window_xcb::TranslateEvent(xcb_generic_event_t* x_event) {
 
 EventType Window_xcb::getEvent(bool wait_for_event) {
 #ifdef ENABLE_GAMEPAD
-    ReadGamepadEvents();
+    gpad.ReadGamepadEvents();
 #endif
     if (!eventFIFO.isEmpty()) return eventFIFO.pop();  // pop message from message queue buffer
     xcb_generic_event_t* x_event;
@@ -2312,355 +2735,6 @@ bool Window_xcb::isFullscreen() {
 }
 #endif
 
-//---Gamepad---
-#ifdef ENABLE_GAMEPAD
-void Window_xcb::DetectGamepads() {
-    if (inotify_fd == -1) {  // inotify not started yet
-        // On first run, scan for already connected gamepads
-        DIR* dir = opendir("/dev/input/");
-        if(dir) {
-            dirent* entry;
-            while ((entry = readdir(dir))) {
-                if (strncmp(entry->d_name, "event", 5) == 0) { // Look for "event#"
-                    char path[512]{};
-                    snprintf(path, sizeof(path), "/dev/input/%s", entry->d_name);
-                    ConnectGamepad(path);
-                }
-            }
-        }
-        // Watch for new device connections using inotify
-        inotify_fd = inotify_init1(IN_NONBLOCK);
-        if (inotify_fd < 0) { perror("inotify_init1"); return; }
-        watch_fd = inotify_add_watch(inotify_fd, "/dev/input/", IN_CREATE);
-    }
-    // Process inotify events
-    char buffer[1024];
-    int len = read(inotify_fd, buffer, sizeof(buffer));
-    if (len > 0) {
-        for (char* ptr = buffer; ptr < buffer + len;) {
-            struct inotify_event* event = (struct inotify_event*)ptr;
-            ptr += sizeof(struct inotify_event) + event->len;
-            if (event->mask & (IN_CREATE)) {
-                if (strncmp(event->name, "event", 5) == 0) {  // Look for "eventX"
-                    char path[256]{};
-                    snprintf(path, sizeof(path), "/dev/input/%s", event->name);
-                    usleep(60000);         // Allow time for the device to appear
-                    ConnectGamepad(path);  // Try to connect as Gamepad
-                }
-            }
-        }
-    }
-}
-
-void setGamepadLED(const char* devicePath, int LED_id, bool state) {
-    int fd = open(devicePath, O_WRONLY);
-    if(fd<0) return;
-    struct input_event event;
-    event.type = EV_LED;
-    event.code = LED_id;
-    event.value = state ? 1 : 0;
-    ssize_t s=write(fd, &event, sizeof(event));
-    close(fd);
-}
-
-void Window_xcb::SetGamepadLEDs(uint8_t id, uint8_t state) {
-    setGamepadLED(evdev[id].path, 0, !!(state&1));
-    setGamepadLED(evdev[id].path, 1, !!(state&2));
-    setGamepadLED(evdev[id].path, 2, !!(state&4));
-    setGamepadLED(evdev[id].path, 3, !!(state&8));
-}
-
-bool Window_xcb::ConnectGamepad(const char* path) {
-    int fd = open(path, O_RDONLY | O_NONBLOCK);
-    if(fd<0) return false;
-    libevdev* dev = nullptr;
-    if (libevdev_new_from_fd(fd, &dev) >= 0) {
-        if(libevdev_has_event_type(dev, EV_ABS)
-        && libevdev_has_event_type(dev, EV_KEY)
-        && libevdev_has_event_code(dev, EV_KEY, BTN_SOUTH)
-        && libevdev_has_event_code(dev, EV_KEY, BTN_NORTH)
-        && libevdev_has_event_code(dev, EV_KEY, BTN_EAST )
-        && libevdev_has_event_code(dev, EV_KEY, BTN_WEST )
-        && libevdev_has_event_code(dev, EV_ABS, ABS_X)
-        && libevdev_has_event_code(dev, EV_ABS, ABS_Y)) {  // make sure this is a gamepad
-            for (int i = 0; i < MAX_GAMEPADS; ++i) {       // find a free slot
-                Evdev& ev = evdev[i];
-                if(ev.fd < 0) {
-                    ev.fd = fd;
-                    ev.dev= dev;
-                    strncpy(ev.name, libevdev_get_name(dev), sizeof(ev.name)-1);  // query gamepad name
-                    strncpy(ev.path, path, sizeof(ev.path)-1);                    // get gamepad event file path
-                    //printf("Gamepad %d found: %s at %s\n", i, ev.name, path);
-                    MapGamepad(i);           // Detect gamepad button layout
-                    SetGamepadLEDs(i,1<<i);  // Set Gamepad LEDs to indicate which slot its in.
-                    eventFIFO.push(gpadConnect(i, true));
-                    return true;
-                }
-            }
-        } else {libevdev_free(dev); ::close(fd);}
-    } else ::close(fd);
-    return false;
-}
-
-void Window_xcb::DisconnectGamepad(uint8_t id) {
-    Evdev& ev = evdev[id];
-    if(ev.fd==-1) return;
-    eventFIFO.push(gpadConnect(id, false));
-    //SetGamepadLEDs(id, 0);  // Does not restore blinking :(
-    libevdev_free(ev.dev);
-    ::close(ev.fd);
-    memset(&ev, 0, sizeof(ev));
-    ev.fd = -1;
-    ev.dev = 0;
-    ev.name[0] = '\0';
-    ev.path[0] = '\0';
-    //printf("Gamepad %d disconnected.\n", id);
-}
-
-void Window_xcb::MapGamepad(uint8_t id) {
-    Evdev& pad = evdev[id];
-    auto dev = pad.dev;
-    const char* name = libevdev_get_name(dev);
-    uint BUS=libevdev_get_id_bustype(dev);
-    uint VID=libevdev_get_id_vendor(dev);
-    uint PID=libevdev_get_id_product(dev);
-    printf("Gamepad %d: \"%s\"\n",id , name);
-    //printf("bus:%#x vendor:%#x product:%#x\n",bus, VID, PID);
-    //-----------------------------------------------------------------
-    int hatx_inx=0;  // HAT0X axis-index
-    int haty_inx=0;  // HAT0Y axis-index
-    int axis_cnt=0;  // not used
-
-    // get the button event code list
-    for (int code=0,b=0; code<KEY_MAX && b<MAX_BTNS; code++)
-        if(libevdev_has_event_code(dev, EV_KEY, code)) pad.b[b++].BTN=code;
-
-    // get axis event code and limits
-    for (int code=0,a=0; code<KEY_MAX && a<MAX_AXIS; code++) {
-        if(libevdev_has_event_code(dev, EV_ABS, code)) {
-            if(code==ABS_HAT0X) hatx_inx=a;  // save the hatx index for later
-            if(code==ABS_HAT0Y) haty_inx=a;  // save the haty index for later
-            auto& axis = pad.a[a++];
-            axis.AXIS = code;
-            axis.min  = libevdev_get_abs_minimum(dev, code);  // axis min value
-            axis.max  = libevdev_get_abs_maximum(dev, code);  // axis max value
-            axis.fuzz = libevdev_get_abs_fuzz   (dev, code);  // noise level
-            axis.flat = libevdev_get_abs_flat   (dev, code);  // dead zone
-        }
-        axis_cnt=a;
-    }
-    //for(auto& line : gamepad_layouts){for(uint8_t val : line) printf("%02X ", val); printf("\n");}
-
-    auto* p_layout = get_gamepad_layout(VID, PID, BUS, name);  // Find layout by gamepad ID
-
-    if(p_layout) {  // Gamepad found. Decode layout tokens.
-        int8_t eBTN [] = {1,2,3,4,5,6,7,8,9,10,11,12,-1,-2,-3,-4,-5,-6,13,14};  // pos-to-eBTN
-        int8_t eAXIS[] = {0,0,0,0,0,0,0,0,0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 0, 0};  // pos-to-eAxis
-        auto layout = *p_layout;
-        for(int i=0; i<layout.size(); ++i) {
-            uint8_t code = layout[i];
-            //printf("%02x ",code);
-            if(code==0xff) continue;                         // not mapped
-            uint8_t num = code &0x1F;                        // extract number
-            bool flip   = code &0x80;                        // extract flip flag
-            bool isBtn  =!(code&0x60);                       // No flag for button
-            bool isHat  = code &0x40;                        // extract hat flag
-            bool isAxis = code &0x20;                        // extract axis flag
-            if(isBtn)  pad.b[num].eBTN  = eBTN[i];           // button event code to eGamepadBtn map
-            if(isAxis) pad.a[num].eAXIS = eAXIS[i];          // axis event code to eGamepadAxis map
-            if(isAxis) pad.a[num].flip  = flip;              // flip axis
-            if(isHat && i==8)  pad.a[hatx_inx].flip = flip;  // flip HAT0X
-            if(isHat && i==10) pad.a[haty_inx].flip = flip;  // flip HAT0Y
-            //printf("i=%d num=%d isBtn=%d isHat=%d isAxis=%d filp=%d\n",i ,num, isBtn, isHat, isAxis, flip);
-        }
-    } else {  // Gamepad not listed.  Use heuristics to guess layout.
-        bool hasHAT=!!(hatx_inx & haty_inx);
-        bool hasTrigger=false;
-
-        auto& a = pad.a;
-        a[0].eAXIS = eAXIS_LX;                                                                                 // left stick X (always first listed axis)
-        a[1].eAXIS = eAXIS_LY;                                                                                 // left stick Y (always second listed axis)
-        for(auto& ax : a) if(ax.AXIS==ABS_HAT0X) {ax.eAXIS=7; hasHAT=true; break;}                             // Hat X (always ABS_HAT0X, or a button)
-        for(auto& ax : a) if(ax.AXIS==ABS_HAT0Y) {ax.eAXIS=8; hasHAT=true; break;}                             // Hat Y (always ABS_HAT0Y, or a button)
-        for(auto& ax : a) if(!ax.eAXIS && ax.min==a[0].min && ax.max==a[0].max) {ax.eAXIS=eAXIS_RX; break;}    // right stick X (min/max should match left stick)
-        for(auto& ax : a) if(!ax.eAXIS && ax.min==a[0].min && ax.max==a[0].max) {ax.eAXIS=eAXIS_RY; break;}    // right stick Y
-        for(auto& ax : a) if(!ax.eAXIS && ax.min==0 && ax.max>1) {ax.eAXIS=eAXIS_TL; hasTrigger=true; break;}  // left trigger (Usually has min=0)
-        for(auto& ax : a) if(!ax.eAXIS && ax.min==0 && ax.max>1) {ax.eAXIS=eAXIS_TR; hasTrigger=true; break;}  // right trigger
-        //for(int i=0; i<axis_cnt; ++i) { auto& ax = a[i]; printf("i:%d  AXIS=%2d eAXIS=%2d  min=%5d  max=%5d  fuzz=%5d  flat=%5d  flip=%d\n", i, ax.AXIS, ax.eAXIS, ax.min, ax.max, ax.fuzz, ax.flat, ax.flip);}
-
-        bool HID_style      = ( hasHAT &&  hasTrigger);  // HID and XInput compliant (XBox)
-        bool Nintendo_style = ( hasHAT && !hasTrigger);  // Nintendo uses button triggers
-        bool Sony_style     = (!hasHAT &&  hasTrigger);  // Sony uses DPad instead of HAT
-
-        auto& btns = pad.b;
-        if(HID_style) {
-            for(auto& b : btns) {
-                if(b.BTN==BTN_A)       b.eBTN=eBTN_A;
-                if(b.BTN==BTN_B)       b.eBTN=eBTN_B;
-                if(b.BTN==BTN_X)       b.eBTN=eBTN_X;
-                if(b.BTN==BTN_Y)       b.eBTN=eBTN_Y;
-                if(b.BTN==BTN_TL)      b.eBTN=eBTN_TL;
-                if(b.BTN==BTN_TR)      b.eBTN=eBTN_TR;
-                if(b.BTN==BTN_THUMBL)  b.eBTN=eBTN_THUMBL;
-                if(b.BTN==BTN_THUMBR)  b.eBTN=eBTN_THUMBR;
-                if(b.BTN==BTN_SELECT)  b.eBTN=eBTN_SELECT;
-                if(b.BTN==BTN_START)   b.eBTN=eBTN_START;
-            }
-        }
-
-        if(Nintendo_style) {
-            for(auto& b : btns) {
-                if(b.BTN==0x130) b.eBTN=eBTN_A;
-                if(b.BTN==0x131) b.eBTN=eBTN_B;
-                if(b.BTN==0x132) b.eBTN=eBTN_X;
-                if(b.BTN==0x133) b.eBTN=eBTN_Y;
-                if(b.BTN==0x134) b.eBTN=eBTN_TL;
-                if(b.BTN==0x135) b.eBTN=eBTN_TR;
-                if(b.BTN==0x136) b.eBTN=-eAXIS_TL;  // button trigger
-                if(b.BTN==0x137) b.eBTN=-eAXIS_TR;  // button trigger
-                if(b.BTN==0x13a) b.eBTN=eBTN_THUMBL;
-                if(b.BTN==0x13b) b.eBTN=eBTN_THUMBR;
-                if(b.BTN==0x138) b.eBTN=eBTN_SELECT;
-                if(b.BTN==0x139) b.eBTN=eBTN_START;
-            }
-        }
-
-        if(Sony_style) {  // untested
-            for(auto& b : btns) {
-                if(b.BTN==0x130) b.eBTN=eBTN_A;
-                if(b.BTN==0x131) b.eBTN=eBTN_B;
-                if(b.BTN==0x132) b.eBTN=eBTN_X;
-                if(b.BTN==0x133) b.eBTN=eBTN_Y;
-                if(b.BTN==0x134) b.eBTN=eBTN_TL;
-                if(b.BTN==0x135) b.eBTN=eBTN_TR;
-                if(b.BTN==0x13d) b.eBTN=eBTN_THUMBL;
-                if(b.BTN==0x13e) b.eBTN=eBTN_THUMBR;
-                if(b.BTN==0x138) b.eBTN=eBTN_SELECT;
-                if(b.BTN==0x139) b.eBTN=eBTN_START;
-            }
-        }
-
-        for(auto& b : btns) {  // DPad buttons (Sony?)
-            if(b.BTN==BTN_DPAD_UP)    b.eBTN=eDPAD_UP;
-            if(b.BTN==BTN_DPAD_DOWN)  b.eBTN=eDPAD_DOWN;
-            if(b.BTN==BTN_DPAD_LEFT)  b.eBTN=eDPAD_LEFT;
-            if(b.BTN==BTN_DPAD_RIGHT) b.eBTN=eDPAD_RIGHT;
-        }
-
-        //for(int i=0; i<MAX_BTNS; ++i) {auto& b = pad.map.b[i]; printf("BTN=%d eBTN=%d\n", b.BTN, b.eBTN);}
-    }
-}
-
-void Window_xcb::ReadGamepadEvents() {
-    DetectGamepads();
-    for (int i=0; i<MAX_GAMEPADS; ++i) {
-        Evdev&   ev  = evdev[i];
-        Gamepad& pad = gamepad[i];
-        if (!pad.active) continue;
-
-       int rc=0;
-        struct input_event event;
-        while ((rc=libevdev_next_event(ev.dev, LIBEVDEV_READ_FLAG_NORMAL, &event)) == 0) {
-            if (event.type == EV_KEY) { GamepadBtnEvent (i, event); } else // Button press/release
-            if (event.type == EV_ABS) { GamepadAxisEvent(i, event); }      // Analog axes and hat buttons
-        }
-        if(rc==-ENODEV) DisconnectGamepad(i);
-    }
-}
-
-void Window_xcb::GamepadBtnEvent(uint8_t id, input_event event) {
-    auto& ev = evdev[id];
-    uint keycode = event.code;
-    //printf("keycode=%d (0x%3x) %d\n", keycode, keycode, event.value);
-    if(event.value>1) return;  // ignore repeats (0=up 1=down 2=repeat)
-    for(auto& b : ev.b) if(keycode==b.BTN) {
-        if(b.eBTN>0) eventFIFO.push(gpadButton(id, b.eBTN, event.value));
-        if(b.eBTN<0) eventFIFO.push(gpadAxis  (id,-b.eBTN, event.value));
-    }
-}
-
-void Window_xcb::GamepadAxisEvent(uint8_t id, input_event event) {
-    Gamepad& pad = gamepad[id];
-    Evdev&   ev  = evdev[id];
-
-    //------------------------------------------------------------------------------
-    auto find_axis = [&](uint axiscode) -> Evdev::Axes& {
-        for(auto& a : ev.a) if(axiscode==a.AXIS) return a;
-        return ev.a[0];
-    };
-
-    auto Hat = [&](int val, int btnNeg, int btnPos) { // convert hat axis values to button events
-        if((val!=-1) && ( pad.buttons[btnNeg])) eventFIFO.push(gpadButton(id, btnNeg, 0));
-        if((val!= 1) && ( pad.buttons[btnPos])) eventFIFO.push(gpadButton(id, btnPos, 0));
-        if((val==-1) && (!pad.buttons[btnNeg])) eventFIFO.push(gpadButton(id, btnNeg, 1));
-        if((val== 1) && (!pad.buttons[btnPos])) eventFIFO.push(gpadButton(id, btnPos, 1));
-    };
-
-    auto isFuzz = [](int value, auto& a) -> bool { // detect fuzz events
-        int delta = abs(a.prev - value);
-        if(delta<a.fuzz) return true;
-        a.prev = value;
-        return false;
-    };
-
-    auto Trigger = [](int value, auto& a) -> float { // Apply dead-zone, normalize
-        int val   = std::max(value-a.min-a.flat,0);
-        int range = std::max(a.max-a.min-a.flat,1);
-        return val / (float)range;
-    };
-
-    auto Thumb = [](int value, auto& a) -> float { // Apply dead-zone, normalize
-        int center = (a.min + a.max) / 2;
-        int centered = value - center;
-        int sign  = centered<0 ? -1:1;
-        int val   = std::max(std::abs(centered) - a.flat, 0);
-        int range = a.max - center - a.flat;
-        return (val / (float)range) * sign;
-    };
-    //------------------------------------------------------------------------------
-
-    auto& a = find_axis(event.code);
-    int val = a.flip ? -event.value : event.value;
-    if(event.code == ABS_HAT0X) {Hat(val, eDPAD_LEFT, eDPAD_RIGHT); return;}
-    if(event.code == ABS_HAT0Y) {Hat(val, eDPAD_UP,   eDPAD_DOWN);  return;}
-    if(event.code > 10) return;         // Ignore HAT1+
-
-    if(isFuzz(event.value, a)) return;  // defuzz
-    bool isTrigger = (a.eAXIS==eAXIS_TL || a.eAXIS==eAXIS_TR);
-    float fval = isTrigger? Trigger(event.value, a)
-                          : Thumb  (event.value, a);
-
-    if(pad.axes[a.eAXIS] == fval) return;  // deadzone
-    if(a.eAXIS==eAXIS_LY || a.eAXIS==eAXIS_RY) fval=-fval; // flip y axis
-    if(a.flip) fval=-fval;
-    eventFIFO.push(gpadAxis(id, a.eAXIS, fval));
-}
-
-/*
-// eg. SetGamepadRumble(0, 20000, 0);
-void Window_xcb::SetGamepadRumble(int index, uint16_t weak, uint16_t strong) {  // TODO
-    if (index < 0 || index >= MAX_GAMEPADS || gamepads[index].fd < 0) return;
-
-    struct ff_effect effect = {};
-    effect.type = FF_RUMBLE;
-    effect.id = -1;
-    effect.u.rumble.strong_magnitude = strong;
-    effect.u.rumble.weak_magnitude = weak;
-    if (ioctl(gamepads[index].fd, EVIOCSFF, &effect) < 0) return;
-
-    struct input_event play = {};
-    play.type = EV_FF;
-    play.code = effect.id;
-    play.value = 1;
-
-    write(gamepads[index].fd, &play, sizeof(play));  // Start rumble
-    usleep(500000);                                  // Let it run for 500ms
-    ioctl(gamepads[index].fd, EVIOCRMFF, effect.id); // Remove the effect
-}
-*/
-
-#endif
-
 #ifdef ENABLE_CLIPBOARD
     void Window_xcb::InitClipboard() {
         atom_CLIPBOARD   = GetAtom("CLIPBOARD");
@@ -2678,7 +2752,6 @@ void Window_xcb::SetGamepadRumble(int index, uint16_t weak, uint16_t strong) {  
         xcb_flush(xcb_connection);
         return true;
     }
-
 
     const char* Window_xcb::getClipboardText() {
         RequestClipboard();  // triggers XCB_SELECTION_NOTIFY event
@@ -2699,6 +2772,772 @@ void Window_xcb::SetGamepadRumble(int index, uint16_t weak, uint16_t strong) {  
 #endif  // GWINDOW_IMPLEMENTATION
 
 #endif  // VK_USE_PLATFORM_XCB_KHR
+//==============================================================
+
+// -------------------------------
+// window_wayland.h
+// -------------------------------
+
+//==========================WAYLAND=============================
+#ifdef VK_USE_PLATFORM_WAYLAND_KHR
+
+#ifndef WINDOW_WAYLAND
+#define WINDOW_WAYLAND
+
+//#define ENABLE_MULTITOUCH
+//#define ENABLE_GAMEPAD       // requires libevdev-dev (8kb)
+//#define ENABLE_CLIPBOARD
+//#define ENABLE_SHOWIMAGE
+//#define ENABLE_CURSOR
+//#define ENABLE_FULLSCREEN
+//#define ENABLE_DPIAWARE
+
+
+#ifdef ENABLE_GAMEPAD
+#endif
+
+#include <wayland-client.h>       // libwayland-dev
+#include <wayland-egl.h>          // libwayland-dev
+#include <wayland-cursor.h>       // libwayland-dev
+#include <libdecor.h>             // libdecor-0-dev
+#include <xkbcommon/xkbcommon.h>  // libxkbcommon-dev
+
+#include <sys/mman.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <cstdlib>
+#include <cassert>
+
+struct native_handle {
+    wl_display* display;
+    wl_surface* surface;
+    wl_egl_window* egl_window;
+};
+
+//==========================WAYLAND=============================
+class Window_wayland : public WindowBase {
+public:
+    wl_display*    display    = nullptr;
+    wl_surface*    surface    = nullptr;
+    wl_egl_window* egl_window = nullptr;
+    bool configured = false;
+
+    wl_registry*   registry   = nullptr;
+    wl_compositor* compositor = nullptr;
+    wl_shm*        shm        = nullptr;
+
+    // libdecor owns xdg_surface / xdg_toplevel
+    libdecor*       decor_context = nullptr;
+    libdecor_frame* decor_frame   = nullptr;
+
+    // --- Input (wl_seat) ---
+    wl_seat*     seat     = nullptr;
+    wl_keyboard* keyboard = nullptr;
+    wl_pointer*  pointer  = nullptr;
+
+#ifdef ENABLE_MULTITOUCH
+    wl_touch*    touch    = nullptr;
+    CMTouch      MTouch;
+#endif
+
+    xkb_context* xkb_ctx        = nullptr;  // xkbcommon context (created once)
+    xkb_keymap*  xkb_keymap_ptr = nullptr;  // (re)created from compositor-supplied keymap
+    xkb_state*   xkb_state_ptr  = nullptr;  // tracks modifier state
+
+#ifdef ENABLE_CURSOR
+    wl_cursor_theme* cursor_theme        = nullptr;
+    wl_surface*      cursor_surface      = nullptr;
+    wl_cursor*       cursors[11]         = {};  // indexed by eCursor
+    uint32_t         pointer_enter_serial = 0;  // serial from the most recent wl_pointer::enter
+    void LoadCursorTheme();
+#endif
+
+#ifdef ENABLE_CLIPBOARD
+    wl_data_device_manager* data_device_manager = nullptr;
+    wl_data_device*         data_device         = nullptr;
+    wl_data_source*         data_source         = nullptr;
+    wl_data_offer*          selection_offer     = nullptr;
+    wl_data_offer*          pending_offer       = nullptr;  // between data_offer and selection
+    uint32_t                keyboard_enter_serial = 0;      // required by wl_data_device.set_selection
+    std::string             clipboard_mime;                 // preferred MIME from current offer
+#endif
+
+#ifdef ENABLE_GAMEPAD
+    GamepadLinux gpad{this};
+#endif
+
+    float scale = 1.f;
+    void Create(const char* title="Window", uint width=640, uint height=480);
+    void applySize(uint w, uint h, libdecor_configuration* c=nullptr);
+public:
+    void setTitle(const char* title) { libdecor_frame_set_title(decor_frame, title); }
+    void setPosition(uint x, uint y) {}  // No Wayland protocol equivalent -- permanent no-op.
+    void setSize(uint w, uint h){applySize(w,h);}
+
+    Window_wayland() {Create();}
+    Window_wayland(const char* title, uint width, uint height);
+    virtual ~Window_wayland();
+    EventType getEvent(bool wait_for_event = false);
+    native_handle* getNativeHandle() const {return (native_handle*)&display;}
+    float getDisplayScale(){return scale;}
+
+#ifdef ENABLE_SHOWIMAGE
+    void showImage(uint32_t* buf, uint32_t width, uint32_t height);
+#endif
+#ifdef ENABLE_CURSOR
+    void setCursor(eCursor id);
+#endif
+#ifdef ENABLE_FULLSCREEN
+    void setFullscreen(bool enable);
+#endif
+#ifdef ENABLE_CLIPBOARD
+    virtual const char* getClipboardText() override;
+    virtual void setClipboardText(const char* str) override;
+#endif
+};
+//==============================================================
+#endif  // WINDOW_WAYLAND
+//#define GWINDOW_IMPLEMENTATION
+#ifdef GWINDOW_IMPLEMENTATION
+
+// Convert native EVDEV key-code to cross-platform USB HID code.
+// (Same table used by the XCB backend; duplicated here since the two backends
+//  are never compiled together and window_xcb.h guards its copy behind VK_USE_PLATFORM_XCB_KHR.)
+// clang-format off
+static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
+  0,  0,  0,  0,  0,  0,  0,  0,  0, 41, 30, 31, 32, 33, 34, 35,
+ 36, 37, 38, 39, 45, 46, 42, 43, 20, 26,  8, 21, 23, 28, 24, 12,
+ 18, 19, 47, 48, 40,224,  4, 22,  7,  9, 10, 11, 13, 14, 15, 51,
+ 52, 53,225, 49, 29, 27,  6, 25,  5, 17, 16, 54, 55, 56,229, 85,
+226, 44, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 83, 71, 95,
+ 96, 97, 86, 92, 93, 94, 87, 89, 90, 91, 98, 99,  0,  0,100, 68,
+ 69,  0,  0,  0,  0,  0,  0,  0, 88,228, 84, 70,230,  0, 74, 82,
+ 75, 80, 79, 77, 81, 78, 73, 76,  0,127,128,129,  0,103,  0, 72,
+  0,  0,  0,  0,  0,227,231,118,  0,  0,  0,  0,  0,  0,  0,  0,
+  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,104,
+105,106,107,108,109,110,111,112,113,114,115,  0,  0,  0,  0,  0,
+  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0
+};
+// clang-format on
+
+//======================WAYLAND CALLBACKS=======================
+    // --- Seat ---
+    static void seat_capabilities(void* data, wl_seat* seat, uint32_t caps);
+    static void seat_name(void*, wl_seat*, const char*) {}
+    static constexpr wl_seat_listener seat_listener = { seat_capabilities, seat_name };
+    // ------------
+
+    // --- Registry listener --- (libdecor binds xdg_wm_base itself; we bind compositor + shm + seat)
+    static void on_global(void* data, wl_registry* reg, uint32_t name, const char* iface, uint32_t version) {
+        auto* w = static_cast<Window_wayland*>(data);
+        //printf("iface: %s\n", iface);
+        auto is=[iface](const wl_interface& i)->bool{ return (strcmp(iface, i.name) == 0);};
+        auto bind=[reg,name](const wl_interface& i, uint32_t ver)->void* {return wl_registry_bind(reg, name, &i, ver);};
+
+        if(is(wl_compositor_interface)){ w->compositor=(wl_compositor*)bind(wl_compositor_interface,6);}
+        if(is(wl_shm_interface)){        w->shm       =(wl_shm*)   bind(wl_shm_interface,   1);}
+        if(is(wl_seat_interface)){       w->seat      =(wl_seat*)  bind(wl_seat_interface,  5); wl_seat_add_listener(w->seat, &seat_listener, w);}
+#ifdef ENABLE_CLIPBOARD
+        if(is(wl_data_device_manager_interface)){ w->data_device_manager=(wl_data_device_manager*)bind(wl_data_device_manager_interface, 3);}
+#endif
+    }
+
+    static void on_global_remove(void*, wl_registry*, uint32_t) {}
+    static constexpr wl_registry_listener registry_listener = { on_global, on_global_remove };
+    // -------------------------
+
+    // --- wl_surface ---
+    static void surface_enter(void* data, wl_surface* surface, wl_output* output) {}
+    static void surface_leave(void* data, wl_surface* surface, wl_output* output) {}
+
+    static void surface_preferred_buffer_scale(void* data, wl_surface*, int32_t factor) {
+        auto* w = static_cast<Window_wayland*>(data);
+        float old_s = w->scale;
+        w->scale = factor;
+
+        //uint log_w = (uint)std::lround(w->shape.width  / old_s);
+        //uint log_h = (uint)std::lround(w->shape.height / old_s);
+        //uint phys_w = (uint)std::lround(log_w * factor);
+        //uint phys_h = (uint)std::lround(log_h * factor);
+        //w->applySize(phys_w, phys_h);
+    }
+    static void surface_preferred_buffer_transform(void*, wl_surface*, uint32_t) {}
+
+    static constexpr wl_surface_listener surface_listener = {
+        surface_enter,
+        surface_leave,
+        surface_preferred_buffer_scale,
+        surface_preferred_buffer_transform
+    };
+    //-------------------
+
+    // --- wl_buffer release ---
+    static void buffer_release(void* data, wl_buffer* buffer) {
+        //auto* w = static_cast<Window_wayland*>(data);
+        wl_buffer_destroy(buffer);
+    }
+    static constexpr wl_buffer_listener buffer_listener = { buffer_release };
+    // -------------------------
+
+    // --- libdecor top-level errors ---
+    static void decor_error(libdecor* context, libdecor_error error, const char* message) {
+        printf("libdecor error (%d): %s\n", (int)error, message);
+    }
+    static constexpr libdecor_interface decor_iface = { decor_error };
+    // -------------------------
+
+    // --- libdecor frame callbacks ---
+    static void decor_frame_configure(libdecor_frame* frame, libdecor_configuration* configuration, void* data) {
+        auto* w = static_cast<Window_wayland*>(data);
+        //printf("configure\n");
+
+        // onFocus event
+        libdecor_window_state window_state = LIBDECOR_WINDOW_STATE_NONE;
+        libdecor_configuration_get_window_state(configuration, &window_state);  // may update window_state
+        w->fullscreen = (window_state & LIBDECOR_WINDOW_STATE_FULLSCREEN) != 0; // fullscreen flag
+        bool active   = (window_state & LIBDECOR_WINDOW_STATE_ACTIVE) != 0;
+        if (active != w->has_focus) w->eventFIFO.push(w->focusEvent(active));
+
+        // onResize event
+        float s    = w->getScale();
+        int width  = w->shape.width /s;
+        int height = w->shape.height/s;
+        libdecor_configuration_get_content_size(configuration, frame, &width, &height);  // may or may not update width/height
+        if(height<1) height=1;
+        w->applySize(width*s, height*s, configuration);
+        w->configured = true;
+    }
+
+    static void decor_frame_close(libdecor_frame*, void* data) {
+        auto* w = static_cast<Window_wayland*>(data);
+        w->eventFIFO.push(w->closeEvent());
+    }
+
+    // Called by libdecor, to flush decoration-only changes.
+    static void decor_frame_commit(libdecor_frame*, void* data) {
+        auto* w = static_cast<Window_wayland*>(data);
+        wl_surface_commit(w->surface);
+    }
+
+    static void decor_frame_dismiss_popup(libdecor_frame*, const char*, void*) {}
+
+    static constexpr libdecor_frame_interface decor_frame_iface = {
+        decor_frame_configure,
+        decor_frame_close,
+        decor_frame_commit,
+        decor_frame_dismiss_popup,
+    };
+    // -------------------------
+
+    // --- wl_keyboard listener ---
+    static void keyboard_keymap(void* data, wl_keyboard*, uint32_t format, int32_t fd, uint32_t size) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1) { ::close(fd); return; }
+
+        char* map_str = (char*)mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
+        ::close(fd);
+        if (map_str == MAP_FAILED) return;
+
+        if (w->xkb_state_ptr)  { xkb_state_unref(w->xkb_state_ptr);   w->xkb_state_ptr  = nullptr; }
+        if (w->xkb_keymap_ptr) { xkb_keymap_unref(w->xkb_keymap_ptr); w->xkb_keymap_ptr = nullptr; }
+
+        w->xkb_keymap_ptr = xkb_keymap_new_from_string(w->xkb_ctx, map_str,
+                                XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
+        munmap(map_str, size);
+        if (w->xkb_keymap_ptr) w->xkb_state_ptr = xkb_state_new(w->xkb_keymap_ptr);
+    }
+
+    static void keyboard_enter(void* data, wl_keyboard*, uint32_t serial, wl_surface*, wl_array*) {
+        auto* w = static_cast<Window_wayland*>(data);
+#ifdef ENABLE_CLIPBOARD
+        w->keyboard_enter_serial = serial;
+#endif
+        if (!w->has_focus) w->eventFIFO.push(w->focusEvent(true));
+    }
+
+    static void keyboard_leave(void* data, wl_keyboard*, uint32_t, wl_surface*) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (w->has_focus) w->eventFIFO.push(w->focusEvent(false));
+    }
+
+    static void keyboard_key(void* data, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state) {
+        auto* w = static_cast<Window_wayland*>(data);
+        uint32_t xkb_code = key + 8;  // wl keycode is raw evdev; xkbcommon/X11 convention adds 8
+        uint8_t hidcode = (xkb_code < 256) ? WAYLAND_EVDEV_TO_HID[xkb_code] : 0;
+        bool down = (state == WL_KEYBOARD_KEY_STATE_PRESSED);
+        if (hidcode) w->eventFIFO.push(w->keyEvent(down ? eDOWN : eUP, hidcode));
+
+        if (down && w->xkb_state_ptr) {
+            static char buf[8] = {};  // static: textEvent() only stores the pointer, not a copy
+            int n = xkb_state_key_get_utf8(w->xkb_state_ptr, xkb_code, buf, sizeof(buf));
+            if (n > 0) w->eventFIFO.push(w->textEvent(buf));
+        }
+    }
+
+    static void keyboard_modifiers(void* data, wl_keyboard*, uint32_t, uint32_t depressed,
+                                    uint32_t latched, uint32_t locked, uint32_t group) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (w->xkb_state_ptr)
+            xkb_state_update_mask(w->xkb_state_ptr, depressed, latched, locked, 0, 0, group);
+    }
+
+    static void keyboard_repeat_info(void*, wl_keyboard*, int32_t, int32_t) {}
+
+    static constexpr wl_keyboard_listener keyboard_listener = {
+        keyboard_keymap, keyboard_enter, keyboard_leave, keyboard_key,
+        keyboard_modifiers, keyboard_repeat_info
+    };
+
+    // --- wl_pointer listener ---
+    // Wayland button codes are raw Linux input-event-codes (BTN_LEFT=0x110, BTN_RIGHT=0x111, BTN_MIDDLE=0x112).
+    #define GW_BTN_LEFT   0x110
+    #define GW_BTN_RIGHT  0x111
+    #define GW_BTN_MIDDLE 0x112
+
+    static void pointer_enter(void* data, wl_pointer*, uint32_t serial, wl_surface* entered_surface, wl_fixed_t sx, wl_fixed_t sy) {
+        auto* w = static_cast<Window_wayland*>(data);
+        w->eventFIFO.push(w->mouseEvent(eMOVE, (int16_t)wl_fixed_to_int(sx), (int16_t)wl_fixed_to_int(sy), 0));
+#ifdef ENABLE_CURSOR
+        if (entered_surface == w->surface) {
+            w->pointer_enter_serial = serial;
+            w->setCursor(eArrow);  // Set mouse cursor icon when mouse enters content surface.
+        }
+#endif
+    }
+
+    static void pointer_leave(void*, wl_pointer*, uint32_t, wl_surface*) {}
+
+    static void pointer_motion(void* data, wl_pointer*, uint32_t, wl_fixed_t x, wl_fixed_t y) {
+        auto* w = static_cast<Window_wayland*>(data);
+        float s=w->getScale();
+        uint8_t bestBtn = w->getBtnState(1) ? 1 : w->getBtnState(2) ? 2 : w->getBtnState(3) ? 3 : 0;
+        w->eventFIFO.push(w->mouseEvent(eMOVE, (int16_t)wl_fixed_to_int(x*s), (int16_t)wl_fixed_to_int(y*s), bestBtn));
+    }
+
+    static void pointer_button(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button, uint32_t state) {
+        auto* w = static_cast<Window_wayland*>(data);
+        uint8_t btn = (button == GW_BTN_LEFT) ? 1 : (button == GW_BTN_RIGHT) ? 2 : (button == GW_BTN_MIDDLE) ? 3 : 0;
+        if (!btn) return;
+        bool down = (state == WL_POINTER_BUTTON_STATE_PRESSED);
+        w->eventFIFO.push(w->mouseEvent(down ? eDOWN : eUP, w->mouse.pos.x, w->mouse.pos.y, btn));
+    }
+
+    static void pointer_axis(void* data, wl_pointer*, uint32_t, uint32_t axis, wl_fixed_t value) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (axis != WL_POINTER_AXIS_VERTICAL_SCROLL) return;
+        uint8_t wheel = (wl_fixed_to_double(value) < 0) ? 4 : 5;
+        w->eventFIFO.push(w->mouseEvent(eDOWN, w->mouse.pos.x, w->mouse.pos.y, wheel));
+    }
+
+    static void pointer_frame(void*, wl_pointer*) {}
+    static void pointer_axis_source(void*, wl_pointer*, uint32_t) {}
+    static void pointer_axis_stop(void*, wl_pointer*, uint32_t, uint32_t) {}
+    static void pointer_axis_discrete(void*, wl_pointer*, uint32_t, int32_t) {}
+
+    static constexpr wl_pointer_listener pointer_listener = {
+        pointer_enter, pointer_leave, pointer_motion, pointer_button, pointer_axis,
+        pointer_frame, pointer_axis_source, pointer_axis_stop, pointer_axis_discrete
+    };
+
+#ifdef ENABLE_MULTITOUCH
+    // --- wl_touch listener ---
+    // Wayland touch coordinates are surface-local logical coordinates.
+    // Convert them to the same physical-pixel coordinates used for mouse.
+
+    static void touch_down(void* data, wl_touch*, uint32_t, uint32_t,
+                           wl_surface* surface, int32_t id,
+                           wl_fixed_t x, wl_fixed_t y) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (surface != w->surface) return;
+        float s = w->getScale();
+        float xs = wl_fixed_to_double(x) * s;
+        float ys = wl_fixed_to_double(y) * s;
+        EventType e = w->MTouch.Event(eDOWN, xs, ys, id);
+        w->eventFIFO.push(e);
+    }
+
+    static void touch_up(void* data, wl_touch*, uint32_t, uint32_t, int32_t id) {
+        auto* w = static_cast<Window_wayland*>(data);
+        auto ptr = w->MTouch.getPointer(id);
+        EventType e = w->MTouch.Event(eUP, ptr.x, ptr.y, id);
+        w->eventFIFO.push(e);
+    }
+
+    static void touch_motion(void* data, wl_touch*, uint32_t, int32_t id,
+                             wl_fixed_t x, wl_fixed_t y) {
+        auto* w = static_cast<Window_wayland*>(data);
+        float s = w->getScale();
+        float xs = wl_fixed_to_double(x) * s;
+        float ys = wl_fixed_to_double(y) * s;
+        EventType e = w->MTouch.Event(eMOVE, xs, ys, id);
+        w->eventFIFO.push(e);
+    }
+
+    static void touch_frame(void*, wl_touch*) {}
+    static void touch_cancel(void* data, wl_touch*) {
+        auto* w = static_cast<Window_wayland*>(data);
+        w->MTouch.Clear();
+    }
+    static void touch_shape(void*, wl_touch*, int32_t, wl_fixed_t, wl_fixed_t) {}
+    static void touch_orientation(void*, wl_touch*, int32_t, wl_fixed_t) {}
+
+    static constexpr wl_touch_listener touch_listener = {
+        touch_down, touch_up, touch_motion, touch_frame, touch_cancel,
+        touch_shape, touch_orientation
+    };
+#endif
+
+    // --- wl_seat capabilities: attach/detach keyboard + pointer + touch as they come and go ---
+    static void seat_capabilities(void* data, wl_seat* seat, uint32_t caps) {
+        auto* w = static_cast<Window_wayland*>(data);
+        bool has_kbd = caps & WL_SEAT_CAPABILITY_KEYBOARD;
+        bool has_ptr = caps & WL_SEAT_CAPABILITY_POINTER;
+#ifdef ENABLE_MULTITOUCH
+        bool has_touch = caps & WL_SEAT_CAPABILITY_TOUCH;
+#endif
+
+        if (has_kbd && !w->keyboard) {
+            w->keyboard = wl_seat_get_keyboard(seat);
+            wl_keyboard_add_listener(w->keyboard, &keyboard_listener, w);
+        } else if (!has_kbd && w->keyboard) {
+            wl_keyboard_release(w->keyboard);
+            w->keyboard = nullptr;
+        }
+
+        if (has_ptr && !w->pointer) {
+            w->pointer = wl_seat_get_pointer(seat);
+            wl_pointer_add_listener(w->pointer, &pointer_listener, w);
+        } else if (!has_ptr && w->pointer) {
+            wl_pointer_release(w->pointer);
+            w->pointer = nullptr;
+        }
+
+#ifdef ENABLE_MULTITOUCH
+        if (has_touch && !w->touch) {
+            w->touch = wl_seat_get_touch(seat);
+            wl_touch_add_listener(w->touch, &touch_listener, w);
+        } else if (!has_touch && w->touch) {
+            wl_touch_release(w->touch);
+            w->touch = nullptr;
+            w->MTouch.Clear();
+        }
+#endif
+    }
+
+#ifdef ENABLE_CLIPBOARD
+    // --- Clipboard: wl_data_offer / source / device (text only) ---
+    static void data_offer(void* data, wl_data_offer*, const char* mime) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (!strcmp(mime, "text/plain;charset=utf-8") || !strcmp(mime, "UTF8_STRING"))
+            w->clipboard_mime = mime;
+        else if (w->clipboard_mime.empty() &&
+                 (!strcmp(mime, "text/plain") || !strcmp(mime, "STRING")))
+            w->clipboard_mime = mime;
+    }
+    static void data_offer_noop_u32(void*, wl_data_offer*, uint32_t) {}
+    static constexpr wl_data_offer_listener data_offer_listener =
+        { data_offer, data_offer_noop_u32, data_offer_noop_u32 };
+
+    static void data_source_send(void* data, wl_data_source*, const char* mime, int32_t fd) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (fd < 0) return;
+        if (mime && (strstr(mime, "text/") || !strcmp(mime, "UTF8_STRING") || !strcmp(mime, "STRING"))) {
+            const char* s = w->clipboard.c_str();
+            for (size_t left = w->clipboard.size(); left; ) {
+                ssize_t n = write(fd, s, left);
+                if (n <= 0) break;
+                s += n; left -= (size_t)n;
+            }
+        }
+        ::close(fd);
+    }
+    static void data_source_cancelled(void* data, wl_data_source* src) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (w->data_source == src) { wl_data_source_destroy(src); w->data_source = nullptr; }
+    }
+    static void data_source_noop_str(void*, wl_data_source*, const char*) {}
+    static void data_source_noop(void*, wl_data_source*) {}
+    static void data_source_noop_u32(void*, wl_data_source*, uint32_t) {}
+    static constexpr wl_data_source_listener data_source_listener = {
+        data_source_noop_str, data_source_send, data_source_cancelled,
+        data_source_noop, data_source_noop, data_source_noop_u32
+    };
+
+    static void data_device_data_offer(void* data, wl_data_device*, wl_data_offer* offer) {
+        auto* w = static_cast<Window_wayland*>(data);
+        // Drop any previous offer that never became the selection (e.g. DnD).
+        if (w->pending_offer && w->pending_offer != w->selection_offer)
+            wl_data_offer_destroy(w->pending_offer);
+        w->pending_offer = offer;
+        w->clipboard_mime.clear();
+        wl_data_offer_add_listener(offer, &data_offer_listener, w);
+    }
+    static void data_device_selection(void* data, wl_data_device*, wl_data_offer* offer) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (w->selection_offer && w->selection_offer != offer)
+            wl_data_offer_destroy(w->selection_offer);
+        w->selection_offer = offer;
+        // MIME types belong to pending_offer; clear if selection is a different offer (or null).
+        if (offer != w->pending_offer) w->clipboard_mime.clear();
+        w->pending_offer = nullptr;
+    }
+    static void data_device_noop_enter(void*, wl_data_device*, uint32_t, wl_surface*, wl_fixed_t, wl_fixed_t, wl_data_offer*) {}
+    static void data_device_noop(void*, wl_data_device*) {}
+    static void data_device_noop_motion(void*, wl_data_device*, uint32_t, wl_fixed_t, wl_fixed_t) {}
+    static constexpr wl_data_device_listener data_device_listener = {
+        data_device_data_offer, data_device_noop_enter, data_device_noop,
+        data_device_noop_motion, data_device_noop, data_device_selection
+    };
+#endif  // ENABLE_CLIPBOARD
+
+//==============================================================
+
+Window_wayland::Window_wayland(const char* title, uint width, uint height) {
+    Create(title, width, height);
+}
+
+void Window_wayland::applySize(uint w, uint h, libdecor_configuration* c) {
+    float s = getScale();
+    uint sw = w/s;
+    uint sh = h/s;
+    wl_surface_set_buffer_scale(surface, s);
+
+    // Update libdecor with new content size
+    libdecor_state* state = libdecor_state_new(sw, sh);
+    libdecor_frame_commit(decor_frame, state, c);
+    libdecor_state_free(state);
+    wl_surface_commit(surface);
+
+    if (w == shape.width && h == shape.height) return;
+    if (egl_window) wl_egl_window_resize(egl_window, w, h, 0, 0);
+    eventFIFO.push(resizeEvent(w, h));
+}
+
+#ifdef ENABLE_FULLSCREEN
+void Window_wayland::setFullscreen(bool enable) {
+    if (enable == fullscreen) return;
+    if (enable) libdecor_frame_set_fullscreen(decor_frame, nullptr);
+    else        libdecor_frame_unset_fullscreen(decor_frame);
+}
+#endif  // ENABLE_FULLSCREEN
+
+#ifdef ENABLE_SHOWIMAGE
+void Window_wayland::showImage(uint32_t* buf, uint32_t width, uint32_t height) {
+    int sw = shape.width;
+    int sh = shape.height;
+    int stride = sw*4;
+    int size = stride*sh;
+
+    char path[] = "/tmp/wl_shm-XXXXXX";
+    int fd = mkstemp(path);  if (fd < 0) return;
+    ::unlink(path);
+    if (::ftruncate(fd, size) < 0) { ::close(fd); return; }
+    void* data = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (data == MAP_FAILED) { ::close(fd); return; }
+    uint32_t* pixels = (uint32_t*)data;
+    //for (int i=0; i<sw*sh; ++i) pixels[i] = 0xFF000000;
+
+    uint32_t w = std::min((uint32_t)shape.width,  width );
+    uint32_t h = std::min((uint32_t)shape.height, height);
+
+    for (int y=0; y<h; ++y) {
+       uint32_t* src = buf + (width*y);
+       uint32_t* dst = pixels + (sw*y);
+       //memcpy(dst, src, w*4);
+       for (int x=0; x<w; ++x) dst[x] = src[x] | 0xFF000000;
+       for (int x=w; x<sw; ++x) dst[x] = 0xFF000000;
+    }
+    for (int y=h; y<sh; ++y) {
+        uint32_t* dst = pixels + (sw*y);
+        for (int x=0; x<sw; ++x) dst[x] = 0xFF000000;
+    }
+
+    munmap(data, size);
+    wl_shm_pool* pool   = wl_shm_create_pool(shm, fd, size);
+    wl_buffer*   buffer = wl_shm_pool_create_buffer(pool, 0, sw, sh, stride, WL_SHM_FORMAT_ARGB8888);
+    wl_shm_pool_destroy(pool);
+    ::close(fd);
+    if (!buffer) return;
+
+    wl_buffer_add_listener(buffer, &buffer_listener, this);
+
+    wl_surface_attach(surface, buffer, 0, 0);
+    wl_surface_damage(surface, 0, 0, sw, sh);
+    wl_surface_commit(surface);
+}
+#endif
+
+#ifdef ENABLE_CURSOR
+void Window_wayland::LoadCursorTheme() {
+    cursor_theme = wl_cursor_theme_load(nullptr, 24, shm);
+    if (!cursor_theme) { printf("WARNING: wl_cursor_theme_load failed -- no cursor icons\n"); return; }
+    cursors[eCursor::eArrow]      = wl_cursor_theme_get_cursor(cursor_theme, "left_ptr");
+    cursors[eCursor::eCaret]      = wl_cursor_theme_get_cursor(cursor_theme, "xterm");
+    cursors[eCursor::eResizeAll]  = wl_cursor_theme_get_cursor(cursor_theme, "fleur");
+    cursors[eCursor::eResizeNS]   = wl_cursor_theme_get_cursor(cursor_theme, "sb_v_double_arrow");
+    cursors[eCursor::eResizeEW]   = wl_cursor_theme_get_cursor(cursor_theme, "sb_h_double_arrow");
+    cursors[eCursor::eResizeNESW] = wl_cursor_theme_get_cursor(cursor_theme, "top_right_corner");
+    cursors[eCursor::eResizeNWSE] = wl_cursor_theme_get_cursor(cursor_theme, "top_left_corner");
+    cursors[eCursor::eHand]       = wl_cursor_theme_get_cursor(cursor_theme, "hand2");
+    cursors[eCursor::eWait]       = wl_cursor_theme_get_cursor(cursor_theme, "wait");
+    cursors[eCursor::eProgress]   = wl_cursor_theme_get_cursor(cursor_theme, "progress");
+    cursors[eCursor::eNotAllowed] = wl_cursor_theme_get_cursor(cursor_theme, "circle");
+    cursor_surface = wl_compositor_create_surface(compositor);
+}
+
+void Window_wayland::setCursor(eCursor id) {
+    wl_cursor* cursor = cursors[id];
+    wl_cursor_image* image  = cursor->images[0];
+    uint             count  = cursor->image_count;  assert(count>0);
+    wl_buffer*       buffer = wl_cursor_image_get_buffer(image);
+    wl_pointer_set_cursor(pointer, pointer_enter_serial, cursor_surface, image->hotspot_x, image->hotspot_y);
+    wl_surface_attach(cursor_surface, buffer, 0, 0);
+    wl_surface_damage(cursor_surface, 0, 0, image->width, image->height);
+    wl_surface_commit(cursor_surface);
+}
+#endif  // ENABLE_CURSOR
+
+//NOTE: Wayland window does not appear until after you attach an image to it.
+void Window_wayland::Create(const char* title, uint width, uint height) {
+    shape.width  = width;
+    shape.height = height;
+    running      = true;
+
+    printf("Creating Wayland-Window...\n");
+
+    display = wl_display_connect(nullptr);
+    if (!display) { printf("ERROR: wl_display_connect failed (no Wayland session?)\n"); return; }
+
+    xkb_ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+
+    registry = wl_display_get_registry(display);
+    wl_registry_add_listener(registry, &registry_listener, this);
+    wl_display_roundtrip(display);  // populates compositor + shm + seat
+
+    if (!compositor) { printf("ERROR: wl_compositor not found\n"); return; }
+    if (!shm)        { printf("ERROR: wl_shm not found\n");        return; }
+    if (!seat)       printf("WARNING: wl_seat not found -- no keyboard/mouse input\n");
+
+#ifdef ENABLE_CLIPBOARD
+    if (data_device_manager && seat) {
+        data_device = wl_data_device_manager_get_data_device(data_device_manager, seat);
+        if (data_device) wl_data_device_add_listener(data_device, &data_device_listener, this);
+    }
+#endif
+
+#ifdef ENABLE_CURSOR
+    LoadCursorTheme();
+#endif
+
+    surface = wl_compositor_create_surface(compositor);
+    if (!surface) { printf("ERROR: wl_compositor_create_surface failed\n"); return; }
+    wl_surface_add_listener(surface, &surface_listener, this);
+    egl_window = wl_egl_window_create(surface, width, height);
+
+    decor_context = libdecor_new(display, const_cast<libdecor_interface*>(&decor_iface));
+    if (!decor_context) { printf("ERROR: libdecor_new failed\n"); return; }
+
+    decor_frame = libdecor_decorate(decor_context, surface,
+                                     const_cast<libdecor_frame_interface*>(&decor_frame_iface), this);
+    if (!decor_frame) { printf("ERROR: libdecor_decorate failed\n"); return; }
+
+    libdecor_frame_set_title(decor_frame, title);
+    libdecor_frame_set_app_id(decor_frame, title);
+    libdecor_frame_map(decor_frame);  // triggers the first configure
+    while(!configured) {libdecor_dispatch(decor_context, -1);} // Wait for configure
+    //eventFIFO.push(resizeEvent(shape.width, shape.height));
+
+#ifndef ENABLE_DPIAWARE
+    setScale(1);
+#endif
+}
+
+EventType Window_wayland::getEvent(bool wait_for_event) {
+#ifdef ENABLE_GAMEPAD
+    gpad.ReadGamepadEvents();
+#endif
+    if (!eventFIFO.isEmpty()) return eventFIFO.pop();
+    libdecor_dispatch(decor_context, wait_for_event ? -1 : 0);
+    return eventFIFO.pop();
+}
+
+#ifdef ENABLE_CLIPBOARD
+void Window_wayland::setClipboardText(const char* str) {
+    clipboard = str ? str : "";
+    if (!data_device_manager || !data_device) return;
+    if (data_source) { wl_data_source_destroy(data_source); data_source = nullptr; }
+    data_source = wl_data_device_manager_create_data_source(data_device_manager);
+    if (!data_source) return;
+    wl_data_source_add_listener(data_source, &data_source_listener, this);
+    wl_data_source_offer(data_source, "text/plain;charset=utf-8");
+    wl_data_source_offer(data_source, "text/plain");
+    // keyboard_enter_serial is required by the protocol (proves we had focus).
+    wl_data_device_set_selection(data_device, data_source, keyboard_enter_serial);
+    wl_display_flush(display);
+}
+
+const char* Window_wayland::getClipboardText() {
+    if (data_source || !selection_offer || !data_device) return clipboard.c_str();
+    const char* mime = clipboard_mime.empty() ? "text/plain;charset=utf-8" : clipboard_mime.c_str();
+    int fds[2];
+    if (pipe(fds) < 0) return clipboard.c_str();
+    wl_data_offer_receive(selection_offer, mime, fds[1]);
+    ::close(fds[1]);
+    wl_display_roundtrip(display);
+    clipboard.clear();
+    char buf[1024];
+    for (;;) {
+        ssize_t n = read(fds[0], buf, sizeof(buf));
+        if (n <= 0) break;
+        clipboard.append(buf, (size_t)n);
+    }
+    ::close(fds[0]);
+    return clipboard.c_str();
+}
+#endif  // ENABLE_CLIPBOARD
+
+Window_wayland::~Window_wayland() {
+    if (xkb_state_ptr)  xkb_state_unref(xkb_state_ptr);
+    if (xkb_keymap_ptr) xkb_keymap_unref(xkb_keymap_ptr);
+    if (xkb_ctx)        xkb_context_unref(xkb_ctx);
+
+    if (keyboard)      wl_keyboard_release(keyboard);
+    if (pointer)       wl_pointer_release(pointer);
+#ifdef ENABLE_MULTITOUCH
+    if (touch)         wl_touch_release(touch);
+#endif
+    if (seat)          wl_seat_release(seat);
+
+#ifdef ENABLE_CLIPBOARD
+    if (pending_offer)   wl_data_offer_destroy(pending_offer);
+    if (selection_offer) wl_data_offer_destroy(selection_offer);
+    if (data_source)     wl_data_source_destroy(data_source);
+    if (data_device)     wl_data_device_release(data_device);
+    if (data_device_manager) wl_data_device_manager_destroy(data_device_manager);
+#endif
+
+#ifdef ENABLE_CURSOR
+    if (cursor_surface) wl_surface_destroy(cursor_surface);
+    if (cursor_theme)   wl_cursor_theme_destroy(cursor_theme);
+#endif
+
+    if (decor_frame)   libdecor_frame_unref(decor_frame);
+    if (egl_window)    wl_egl_window_destroy(egl_window);
+    if (surface)       wl_surface_destroy(surface);
+    if (decor_context) libdecor_unref(decor_context);
+    if (compositor)    wl_compositor_destroy(compositor);
+    if (shm)           wl_shm_destroy(shm);
+    if (registry)      wl_registry_destroy(registry);
+    if (display)       wl_display_disconnect(display);
+}
+
+#endif // GWINDOW_IMPLEMENTATION
+
+#endif  // VK_USE_PLATFORM_WAYLAND_KHR
 //==============================================================
 
 // -------------------------------
@@ -3992,6 +4831,8 @@ class Window_android : public WindowBase {
 
 #if defined(VK_USE_PLATFORM_XCB_KHR)
     typedef Window_xcb GWindow;
+#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
+    typedef Window_wayland GWindow;
 #elif defined(VK_USE_PLATFORM_WIN32_KHR)
     typedef Window_win32 GWindow;
 #elif defined(VK_USE_PLATFORM_ANDROID_KHR)

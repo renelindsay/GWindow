@@ -11,9 +11,11 @@ header_files = [
     "config.h",
     "keycodes.h",
     "WindowBase.h",
-    "gamepads.h",
+    "gamepads.h",    
+    "gamepad_linux.h",
     "window_win32.h",
     "window_xcb.h",
+    "window_wayland.h",
     
     "android/android_fopen.h",
     "android/JClass.h",

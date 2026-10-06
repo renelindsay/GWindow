@@ -251,10 +251,16 @@ def write_header_top():
         print("// - Duplicates and problematic items were discarded.", file=f)
         print("// - Controllers with missing buttons were discarded.", file=f)
         print("", file=f)
-        print("#if defined(__linux__) && !defined(__ANDROID__)", file=f)
+        print("#if defined(__linux__) && !defined(__ANDROID__)  // Linux, but not Android", file=f)
         print("#define LINUX", file=f)
         print("#endif", file=f)
         print("", file=f)
+        
+        print("#if !defined(__linux__)  // Not for Win32", file=f)
+        print("#define GAMEPAD_H", file=f)
+        print("#endif", file=f)
+        print("", file=f)
+        
         print("#ifndef GAMEPAD_H",file=f)
         print("#define GAMEPAD_H",file=f)
         print(file=f)

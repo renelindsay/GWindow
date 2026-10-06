@@ -14,14 +14,13 @@ PFNGLCLEARCOLORPROC glClearColor = nullptr;
 constexpr unsigned int GL_COLOR_BUFFER_BIT = 0x00004000;
 
 int main() {
-    glClearColor = (PFNGLCLEARCOLORPROC)eglGetProcAddress("glClearColor");
-    glClear      = (PFNGLCLEARPROC)     eglGetProcAddress("glClear");
-
     GLWindow window;
     window.setTitle("Minimal OpenGLES App - GLWindow + EGL + GLES");
     window.setSize(1024,768);
 
     if (!window.InitEGL(3, 2)) { printf("GLES failed.\n"); return -1; }
+    glClearColor = (PFNGLCLEARCOLORPROC)eglGetProcAddress("glClearColor");
+    glClear      = (PFNGLCLEARPROC)     eglGetProcAddress("glClear");
 
     eglSwapInterval(window.GetEGLDisplay(), 1);  // V-sync
     auto start = steady_clock::now();            // timer

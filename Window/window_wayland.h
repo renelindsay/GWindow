@@ -4,20 +4,25 @@
 #ifndef WINDOW_WAYLAND
 #define WINDOW_WAYLAND
 
-#define ENABLE_MULTITOUCH
-//#define ENABLE_GAMEPAD
-#define ENABLE_CLIPBOARD
-#define ENABLE_SHOWIMAGE
-#define ENABLE_CURSOR
-#define ENABLE_FULLSCREEN
-#define ENABLE_DPIAWARE
+//#define ENABLE_MULTITOUCH
+//#define ENABLE_GAMEPAD       // requires libevdev-dev (8kb)
+//#define ENABLE_CLIPBOARD
+//#define ENABLE_SHOWIMAGE
+//#define ENABLE_CURSOR
+//#define ENABLE_FULLSCREEN
+//#define ENABLE_DPIAWARE
 
 #include "WindowBase.h"
-#include <wayland-client.h>
-#include <wayland-egl.h>
-#include <wayland-cursor.h>
-#include <libdecor.h>
-#include <xkbcommon/xkbcommon.h>
+
+#ifdef ENABLE_GAMEPAD
+#include "gamepad_linux.h"
+#endif
+
+#include <wayland-client.h>       // libwayland-dev
+#include <wayland-egl.h>          // libwayland-dev
+#include <wayland-cursor.h>       // libwayland-dev
+#include <libdecor.h>             // libdecor-0-dev
+#include <xkbcommon/xkbcommon.h>  // libxkbcommon-dev
 
 #include <sys/mman.h>
 #include <unistd.h>
@@ -79,6 +84,10 @@ public:
     std::string             clipboard_mime;                 // preferred MIME from current offer
 #endif
 
+#ifdef ENABLE_GAMEPAD
+    GamepadLinux gpad{this};
+#endif
+
     float scale = 1.f;
     void Create(const char* title="Window", uint width=640, uint height=480);
     void applySize(uint w, uint h, libdecor_configuration* c=nullptr);
@@ -97,7 +106,6 @@ public:
 #ifdef ENABLE_SHOWIMAGE
     void showImage(uint32_t* buf, uint32_t width, uint32_t height);
 #endif
-
 #ifdef ENABLE_CURSOR
     void setCursor(eCursor id);
 #endif
@@ -671,6 +679,9 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
 }
 
 EventType Window_wayland::getEvent(bool wait_for_event) {
+#ifdef ENABLE_GAMEPAD
+    gpad.ReadGamepadEvents();
+#endif
     if (!eventFIFO.isEmpty()) return eventFIFO.pop();
     libdecor_dispatch(decor_context, wait_for_event ? -1 : 0);
     return eventFIFO.pop();
