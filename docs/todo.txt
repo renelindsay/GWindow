@@ -1,4 +1,3 @@
-- Add Wayland support (new platform implementation)
 - Add MacOS support (new platform implementation)
 - Implement timeout when main loop is in blocking mode
 - Fix Android JClass crash when calling GUI thread functions

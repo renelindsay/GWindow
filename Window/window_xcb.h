@@ -8,7 +8,7 @@
 #define WINDOW_XCB
 
 //#define ENABLE_MULTITOUCH  // requires libxi-dev
-//#define ENABLE_GAMEPAD     // requires libevdev-dev (8kb)
+//#define ENABLE_GAMEPAD     // requires libevdev-dev (14kb)
 //#define ENABLE_CLIPBOARD   // requires libxcb-icccm4-dev + libxcb1-dev
 //#define ENABLE_SHOWIMAGE   // requires libxcb-image0-dev + libxcb1-dev
 //#define ENABLE_CURSOR      // requires libxcb-cursor-dev + libxcb1-dev + libxcb-cursor0
@@ -16,6 +16,8 @@
 
 //-------------------------------------------------
 #include "WindowBase.h"
+#include "gamepad_linux.h"
+
 //#include <xcb/xcb.h>            // XCB only
 //#include <X11/Xlib.h>           // XLib only
 #include <X11/Xlib-xcb.h>         // Xlib + XCB
@@ -27,9 +29,6 @@
 #endif
 #ifdef ENABLE_CURSOR
 #include <xcb/xcb_cursor.h>       // mouse cursor icons
-#endif
-#ifdef ENABLE_GAMEPAD
-#include "gamepad_linux.h"
 #endif
 #ifdef ENABLE_FULLSCREEN
 #include <xcb/xcb.h>
@@ -72,7 +71,7 @@ struct native_handle {
 };
 
 //=============================XCB==============================
-class Window_xcb : public WindowBase {
+class Window_xcb : public WindowBase, GamepadLinux {
     Display* display;                  // for XLib
     xcb_connection_t* xcb_connection;  // for XCB
     xcb_screen_t* xcb_screen;
@@ -99,7 +98,9 @@ class Window_xcb : public WindowBase {
     //------------------
     //---- Gamepad ----
 #ifdef ENABLE_GAMEPAD
-    GamepadLinux gpad{this};
+    void onGpadConnect(uint8_t pad, bool active)            override {eventFIFO.push(gpadConnect(pad, active));}
+    void onGpadButton (uint8_t pad, uint8_t btn, bool down) override {eventFIFO.push(gpadButton(pad,btn,down));}
+    void onGpadAxis   (uint8_t pad, uint8_t axis, float val)override {eventFIFO.push(gpadAxis(pad, axis, val));}
 #endif
     //------------------
 
@@ -508,7 +509,7 @@ EventType Window_xcb::TranslateEvent(xcb_generic_event_t* x_event) {
 
 EventType Window_xcb::getEvent(bool wait_for_event) {
 #ifdef ENABLE_GAMEPAD
-    gpad.ReadGamepadEvents();
+    ReadGamepadEvents();
 #endif
     if (!eventFIFO.isEmpty()) return eventFIFO.pop();  // pop message from message queue buffer
     xcb_generic_event_t* x_event;

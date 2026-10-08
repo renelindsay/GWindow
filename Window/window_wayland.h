@@ -5,7 +5,7 @@
 #define WINDOW_WAYLAND
 
 //#define ENABLE_MULTITOUCH
-//#define ENABLE_GAMEPAD       // requires libevdev-dev (8kb)
+//#define ENABLE_GAMEPAD       // requires libevdev-dev (14kb)
 //#define ENABLE_CLIPBOARD
 //#define ENABLE_SHOWIMAGE
 //#define ENABLE_CURSOR
@@ -13,10 +13,7 @@
 //#define ENABLE_DPIAWARE
 
 #include "WindowBase.h"
-
-#ifdef ENABLE_GAMEPAD
 #include "gamepad_linux.h"
-#endif
 
 #include <wayland-client.h>       // libwayland-dev
 #include <wayland-egl.h>          // libwayland-dev
@@ -37,7 +34,7 @@ struct native_handle {
 };
 
 //==========================WAYLAND=============================
-class Window_wayland : public WindowBase {
+class Window_wayland : public WindowBase, GamepadLinux {
 public:
     wl_display*    display    = nullptr;
     wl_surface*    surface    = nullptr;
@@ -85,7 +82,9 @@ public:
 #endif
 
 #ifdef ENABLE_GAMEPAD
-    GamepadLinux gpad{this};
+    void onGpadConnect(uint8_t pad, bool active)            override {eventFIFO.push(gpadConnect(pad, active));}
+    void onGpadButton (uint8_t pad, uint8_t btn, bool down) override {eventFIFO.push(gpadButton(pad,btn,down));}
+    void onGpadAxis   (uint8_t pad, uint8_t axis, float val)override {eventFIFO.push(gpadAxis(pad, axis, val));}
 #endif
 
     float scale = 1.f;
@@ -680,7 +679,7 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
 
 EventType Window_wayland::getEvent(bool wait_for_event) {
 #ifdef ENABLE_GAMEPAD
-    gpad.ReadGamepadEvents();
+    ReadGamepadEvents();
 #endif
     if (!eventFIFO.isEmpty()) return eventFIFO.pop();
     libdecor_dispatch(decor_context, wait_for_event ? -1 : 0);

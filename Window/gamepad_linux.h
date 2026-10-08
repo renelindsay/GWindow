@@ -1,7 +1,21 @@
+// Gamepad support for Linux (X11 and Wayland)
+//
+// HOW TO USE:
+// 1: Inherit your class from the GamepadLinux class.
+//
+// 2: Implement the 3 even handler functions:
+//       virtual void onGpadConnect(uint8_t pad, bool active){...}
+//       virtual void onGpadButton (uint8_t pad, uint8_t btn, bool down){...}
+//       virtual void onGpadAxis   (uint8_t pad, uint8_t axis, float val){...}
+//
+// 3: Periodically call the ReadGamepadEvents() function, to trigger events.
+//
+
 #ifndef GAMEPAD_LINUX_H
 #define GAMEPAD_LINUX_H
 
-//#ifdef ENABLE_GAMEPAD
+//#define ENABLE_GAMEPAD
+#ifdef  ENABLE_GAMEPAD
 #include <libevdev/libevdev.h>    // libevdev-dev
 #include <fcntl.h>                // open
 #include <unistd.h>               // read, close, usleep
@@ -9,13 +23,12 @@
 #include <dirent.h>               // For scanning /dev/input/
 #include <sys/ioctl.h>
 #include <linux/input.h>
-#include "gamepads.h"
+#include "gamepads.h"             // Lookup button layouts
 
 #define MAX_BTNS 16
 #define MAX_AXIS 16
 
 class GamepadLinux {
-    WindowBase* win;              // owner window (gamepad[], eventFIFO, gpad*)
     int inotify_fd = -1;          // gamepad inotify descriptor
     int watch_fd   = -1;          // gamepad watch descriptor
     
@@ -39,8 +52,11 @@ class GamepadLinux {
             int  flat=0;          // Dead zone
             bool flip=false;      // Flip this axis
             int  prev=0;          // previous value
+            float last=0;         // discard unchanged values
         }a[MAX_AXIS]={};          // axes
 
+        int8_t hat_x = 0;         // last ABS_HAT0X: -1 / 0 / 1
+        int8_t hat_y = 0;         // last ABS_HAT0Y
     } evdev[MAX_GAMEPADS];
 
     //void DetectGamepads();                                   // Detect connected gamepads
@@ -52,12 +68,13 @@ class GamepadLinux {
     //void GamepadBtnEvent(uint8_t id, input_event event);     // Button events
     //void GamepadAxisEvent(uint8_t id, input_event event);    // Axis events
 
-    void onConnect(uint8_t pad, bool active)            {win->eventFIFO.push(win->gpadConnect(pad, active));}
-    void onButton (uint8_t pad, uint8_t btn, bool down) {win->eventFIFO.push(win->gpadButton(pad,btn,down));}
-    void onAxis   (uint8_t pad, uint8_t axis, float val){win->eventFIFO.push(win->gpadAxis(pad, axis, val));}
-
 public:
-    explicit GamepadLinux(WindowBase* window) : win(window) {}
+    // Event handlers:
+    virtual void onGpadConnect(uint8_t pad, bool active){}
+    virtual void onGpadButton (uint8_t pad, uint8_t btn, bool down){}
+    virtual void onGpadAxis   (uint8_t pad, uint8_t axis, float val){}
+
+    GamepadLinux() {}
 
     ~GamepadLinux() {
         for (int i = 0; i < MAX_GAMEPADS; ++i) { DisconnectGamepad(i); }
@@ -68,17 +85,16 @@ public:
     void ReadGamepadEvents() {
         DetectGamepads();
         for (int i=0; i<MAX_GAMEPADS; ++i) {
-            Evdev&   ev  = evdev[i];
-            Gamepad& pad = win->gamepad[i];
-            if (!pad.active) continue;
+            Evdev& ev = evdev[i];
+            if (ev.fd < 0) continue;
 
-           int rc=0;
+            int rc = 0;
             struct input_event event;
-            while ((rc=libevdev_next_event(ev.dev, LIBEVDEV_READ_FLAG_NORMAL, &event)) == 0) {
+            while ((rc = libevdev_next_event(ev.dev, LIBEVDEV_READ_FLAG_NORMAL, &event)) == 0) {
                 if (event.type == EV_KEY) { GamepadBtnEvent (i, event); } else // Button press/release
                 if (event.type == EV_ABS) { GamepadAxisEvent(i, event); }      // Analog axes and hat buttons
             }
-            if(rc==-ENODEV) DisconnectGamepad(i);
+            if (rc == -ENODEV) DisconnectGamepad(i);
         }
     }
 
@@ -163,7 +179,7 @@ private:
                         //printf("Gamepad %d found: %s at %s\n", i, ev.name, path);
                         MapGamepad(i);           // Detect gamepad button layout
                         SetGamepadLEDs(i,1<<i);  // Set Gamepad LEDs to indicate which slot its in.
-                        onConnect(i, true);
+                        onGpadConnect(i, true);
                         return true;
                     }
                 }
@@ -176,7 +192,7 @@ private:
     void DisconnectGamepad(uint8_t id) {
         Evdev& ev = evdev[id];
         if(ev.fd==-1) return;
-        onConnect(id, false);
+        onGpadConnect(id, false);
         //SetGamepadLEDs(id, 0);  // Does not restore blinking :(
         libevdev_free(ev.dev);
         ::close(ev.fd);
@@ -198,16 +214,16 @@ private:
         printf("Gamepad %d: \"%s\"\n",id , name);
         //printf("bus:%#x vendor:%#x product:%#x\n",bus, VID, PID);
         //-----------------------------------------------------------------
-        int hatx_inx=0;  // HAT0X axis-index
-        int haty_inx=0;  // HAT0Y axis-index
-        int axis_cnt=0;  // not used
+        int hatx_inx=-1;  // HAT0X axis-index (-1 = not found)
+        int haty_inx=-1;  // HAT0Y axis-index (-1 = not found)
+        int axis_cnt=0;   // not used
 
         // get the button event code list
         for (int code=0,b=0; code<KEY_MAX && b<MAX_BTNS; code++)
             if(libevdev_has_event_code(dev, EV_KEY, code)) pad.b[b++].BTN=code;
 
         // get axis event code and limits
-        for (int code=0,a=0; code<KEY_MAX && a<MAX_AXIS; code++) {
+        for (int code=0,a=0; code<ABS_MAX && a<MAX_AXIS; code++) {
             if(libevdev_has_event_code(dev, EV_ABS, code)) {
                 if(code==ABS_HAT0X) hatx_inx=a;  // save the hatx index for later
                 if(code==ABS_HAT0Y) haty_inx=a;  // save the haty index for later
@@ -240,12 +256,12 @@ private:
                 if(isBtn)  pad.b[num].eBTN  = eBTN[i];           // button event code to eGamepadBtn map
                 if(isAxis) pad.a[num].eAXIS = eAXIS[i];          // axis event code to eGamepadAxis map
                 if(isAxis) pad.a[num].flip  = flip;              // flip axis
-                if(isHat && i==8)  pad.a[hatx_inx].flip = flip;  // flip HAT0X
-                if(isHat && i==10) pad.a[haty_inx].flip = flip;  // flip HAT0Y
+                if(isHat && i==8  && hatx_inx>=0) pad.a[hatx_inx].flip = flip;  // flip HAT0X
+                if(isHat && i==10 && haty_inx>=0) pad.a[haty_inx].flip = flip;  // flip HAT0Y
                 //printf("i=%d num=%d isBtn=%d isHat=%d isAxis=%d filp=%d\n",i ,num, isBtn, isHat, isAxis, flip);
             }
         } else {  // Gamepad not listed.  Use heuristics to guess layout.
-            bool hasHAT=!!(hatx_inx & haty_inx);
+            bool hasHAT = (hatx_inx >= 0 && haty_inx >= 0);
             bool hasTrigger=false;
 
             auto& a = pad.a;
@@ -328,13 +344,12 @@ private:
         //printf("keycode=%d (0x%3x) %d\n", keycode, keycode, event.value);
         if(event.value>1) return;  // ignore repeats (0=up 1=down 2=repeat)
         for(auto& b : ev.b) if(keycode==b.BTN) {
-            if(b.eBTN>0) onButton(id, b.eBTN, event.value);
-            if(b.eBTN<0) onAxis  (id,-b.eBTN, event.value);
+            if(b.eBTN>0) onGpadButton(id, b.eBTN, event.value);
+            if(b.eBTN<0) onGpadAxis  (id,-b.eBTN, event.value);
         }
     }
 
     void GamepadAxisEvent(uint8_t id, input_event event) {
-        Gamepad& pad = win->gamepad[id];
         Evdev&   ev  = evdev[id];
 
         //------------------------------------------------------------------------------
@@ -343,11 +358,13 @@ private:
             return ev.a[0];
         };
 
-        auto Hat = [&](int val, int btnNeg, int btnPos) { // convert hat axis values to button events
-            if((val!=-1) && ( pad.buttons[btnNeg])) onButton(id, btnNeg, 0);
-            if((val!= 1) && ( pad.buttons[btnPos])) onButton(id, btnPos, 0);
-            if((val==-1) && (!pad.buttons[btnNeg])) onButton(id, btnNeg, 1);
-            if((val== 1) && (!pad.buttons[btnPos])) onButton(id, btnPos, 1);
+        auto Hat = [&](int val, int8_t& prev, int btnNeg, int btnPos) {
+            if (val == prev) return;
+            if (prev == -1) onGpadButton(id, btnNeg, 0);
+            if (prev ==  1) onGpadButton(id, btnPos, 0);
+            if (val  == -1) onGpadButton(id, btnNeg, 1);
+            if (val  ==  1) onGpadButton(id, btnPos, 1);
+            prev = static_cast<int8_t>(val);
         };
 
         auto isFuzz = [](int value, auto& a) -> bool { // detect fuzz events
@@ -375,19 +392,21 @@ private:
 
         auto& a = find_axis(event.code);
         int val = a.flip ? -event.value : event.value;
-        if(event.code == ABS_HAT0X) {Hat(val, eDPAD_LEFT, eDPAD_RIGHT); return;}
-        if(event.code == ABS_HAT0Y) {Hat(val, eDPAD_UP,   eDPAD_DOWN);  return;}
-        if(event.code > 10) return;         // Ignore HAT1+
+        if(event.code == ABS_HAT0X) { Hat(val, ev.hat_x, eDPAD_LEFT, eDPAD_RIGHT); return; }
+        if(event.code == ABS_HAT0Y) { Hat(val, ev.hat_y, eDPAD_UP,   eDPAD_DOWN);  return; }
+        if(event.code > 10) return;  // Ignore HAT1+
 
         if(isFuzz(event.value, a)) return;  // defuzz
         bool isTrigger = (a.eAXIS==eAXIS_TL || a.eAXIS==eAXIS_TR);
         float fval = isTrigger? Trigger(event.value, a)
                               : Thumb  (event.value, a);
 
-        if(pad.axes[a.eAXIS] == fval) return;  // deadzone
+        if (a.last == fval) return;   // unchanged after dead-zone / normalize
+        a.last = fval;                // value changed. store new value.
+
         if(a.eAXIS==eAXIS_LY || a.eAXIS==eAXIS_RY) fval=-fval; // flip y axis
         if(a.flip) fval=-fval;
-        onAxis(id, a.eAXIS, fval);
+        onGpadAxis(id, a.eAXIS, fval);
     }
 
     /*
@@ -413,6 +432,7 @@ private:
     }
     */
 };
-
-//#endif  // ENABLE_GAMEPAD
+#else   // ENABLE_GAMEPAD
+class GamepadLinux{};
+#endif  // ENABLE_GAMEPAD
 #endif  // GAMEPAD_LINUX_H

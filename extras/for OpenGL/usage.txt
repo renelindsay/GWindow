@@ -4,4 +4,4 @@ Vulkan:
 
 OpenGL/ES:
   GLWindow winGL("OpenGL", 1280, 720);
-  winGL.InitEGL(4, 6);  // or InitEGL(3,0,true) for GLES3
+  window.InitEGL(3, 2)  // GLES3

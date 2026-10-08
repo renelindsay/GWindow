@@ -53,9 +53,11 @@ For Android builds:
 
 2. Linux: Optional dependencies for clipboard and mouse cursor support.
    
-   - If not needed, optional features can be disabled in config.h
+   - Optional features can be disabled in config.h
    - Some build-time -dev packages are required (C header files)
-   - Run `dependencies.sh` to install them
+   - For X11 builds, run `dependencies_x11.sh` to install dependencies.
+   - Run Wayland builds, run`dependencies_wayland.sh` to install dependencies.
+   - For Wayland builds, set the **USE_WAYLAND** CMake flag.
 
 ### Tests
 
@@ -127,4 +129,4 @@ MIT License (see `LICENSE` file).
 ## 📌 Notes
 
 - Place asset files in `/assets/` for inclusion in the Android APK.
-- See `docs/todo.txt` for planned features (e.g., Wayland support).
+- See `docs/todo.txt` for planned features.
