@@ -1,3 +1,31 @@
+/*
+ * GWindow.h - Lightweight cross-platform window + input library
+ *            (Windows / Linux / Android) for Vulkan, OpenGL(ES) or software rendering.
+ *
+ * https://github.com/renelindsay/GWindow
+ *
+ * Copyright (c) 2024-2026 Rene Lindsay
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ */
+
 // =========
 // GWindow.h
 // =========
@@ -1126,10 +1154,24 @@ static const std::array<uint8_t, 20>* get_gamepad_layout(uint16_t VID, uint16_t 
 // gamepad_linux.h
 // -------------------------------
 
+// Gamepad support for Linux (X11 and Wayland)
+//
+// HOW TO USE:
+// 1: Inherit your class from the GamepadLinux class.
+//
+// 2: Implement the 3 even handler functions:
+//       virtual void onGpadConnect(uint8_t pad, bool active){...}
+//       virtual void onGpadButton (uint8_t pad, uint8_t btn, bool down){...}
+//       virtual void onGpadAxis   (uint8_t pad, uint8_t axis, float val){...}
+//
+// 3: Periodically call the ReadGamepadEvents() function, to trigger events.
+//
+
 #ifndef GAMEPAD_LINUX_H
 #define GAMEPAD_LINUX_H
 
-//#ifdef ENABLE_GAMEPAD
+//#define ENABLE_GAMEPAD
+#ifdef  ENABLE_GAMEPAD
 #include <libevdev/libevdev.h>    // libevdev-dev
 #include <fcntl.h>                // open
 #include <unistd.h>               // read, close, usleep
@@ -1142,7 +1184,6 @@ static const std::array<uint8_t, 20>* get_gamepad_layout(uint16_t VID, uint16_t 
 #define MAX_AXIS 16
 
 class GamepadLinux {
-    WindowBase* win;              // owner window (gamepad[], eventFIFO, gpad*)
     int inotify_fd = -1;          // gamepad inotify descriptor
     int watch_fd   = -1;          // gamepad watch descriptor
     
@@ -1166,8 +1207,11 @@ class GamepadLinux {
             int  flat=0;          // Dead zone
             bool flip=false;      // Flip this axis
             int  prev=0;          // previous value
+            float last=0;         // discard unchanged values
         }a[MAX_AXIS]={};          // axes
 
+        int8_t hat_x = 0;         // last ABS_HAT0X: -1 / 0 / 1
+        int8_t hat_y = 0;         // last ABS_HAT0Y
     } evdev[MAX_GAMEPADS];
 
     //void DetectGamepads();                                   // Detect connected gamepads
@@ -1179,12 +1223,13 @@ class GamepadLinux {
     //void GamepadBtnEvent(uint8_t id, input_event event);     // Button events
     //void GamepadAxisEvent(uint8_t id, input_event event);    // Axis events
 
-    void onConnect(uint8_t pad, bool active)            {win->eventFIFO.push(win->gpadConnect(pad, active));}
-    void onButton (uint8_t pad, uint8_t btn, bool down) {win->eventFIFO.push(win->gpadButton(pad,btn,down));}
-    void onAxis   (uint8_t pad, uint8_t axis, float val){win->eventFIFO.push(win->gpadAxis(pad, axis, val));}
-
 public:
-    explicit GamepadLinux(WindowBase* window) : win(window) {}
+    // Event handlers:
+    virtual void onGpadConnect(uint8_t pad, bool active){}
+    virtual void onGpadButton (uint8_t pad, uint8_t btn, bool down){}
+    virtual void onGpadAxis   (uint8_t pad, uint8_t axis, float val){}
+
+    GamepadLinux() {}
 
     ~GamepadLinux() {
         for (int i = 0; i < MAX_GAMEPADS; ++i) { DisconnectGamepad(i); }
@@ -1195,17 +1240,16 @@ public:
     void ReadGamepadEvents() {
         DetectGamepads();
         for (int i=0; i<MAX_GAMEPADS; ++i) {
-            Evdev&   ev  = evdev[i];
-            Gamepad& pad = win->gamepad[i];
-            if (!pad.active) continue;
+            Evdev& ev = evdev[i];
+            if (ev.fd < 0) continue;
 
-           int rc=0;
+            int rc = 0;
             struct input_event event;
-            while ((rc=libevdev_next_event(ev.dev, LIBEVDEV_READ_FLAG_NORMAL, &event)) == 0) {
+            while ((rc = libevdev_next_event(ev.dev, LIBEVDEV_READ_FLAG_NORMAL, &event)) == 0) {
                 if (event.type == EV_KEY) { GamepadBtnEvent (i, event); } else // Button press/release
                 if (event.type == EV_ABS) { GamepadAxisEvent(i, event); }      // Analog axes and hat buttons
             }
-            if(rc==-ENODEV) DisconnectGamepad(i);
+            if (rc == -ENODEV) DisconnectGamepad(i);
         }
     }
 
@@ -1290,7 +1334,7 @@ private:
                         //printf("Gamepad %d found: %s at %s\n", i, ev.name, path);
                         MapGamepad(i);           // Detect gamepad button layout
                         SetGamepadLEDs(i,1<<i);  // Set Gamepad LEDs to indicate which slot its in.
-                        onConnect(i, true);
+                        onGpadConnect(i, true);
                         return true;
                     }
                 }
@@ -1303,7 +1347,7 @@ private:
     void DisconnectGamepad(uint8_t id) {
         Evdev& ev = evdev[id];
         if(ev.fd==-1) return;
-        onConnect(id, false);
+        onGpadConnect(id, false);
         //SetGamepadLEDs(id, 0);  // Does not restore blinking :(
         libevdev_free(ev.dev);
         ::close(ev.fd);
@@ -1325,16 +1369,16 @@ private:
         printf("Gamepad %d: \"%s\"\n",id , name);
         //printf("bus:%#x vendor:%#x product:%#x\n",bus, VID, PID);
         //-----------------------------------------------------------------
-        int hatx_inx=0;  // HAT0X axis-index
-        int haty_inx=0;  // HAT0Y axis-index
-        int axis_cnt=0;  // not used
+        int hatx_inx=-1;  // HAT0X axis-index (-1 = not found)
+        int haty_inx=-1;  // HAT0Y axis-index (-1 = not found)
+        int axis_cnt=0;   // not used
 
         // get the button event code list
         for (int code=0,b=0; code<KEY_MAX && b<MAX_BTNS; code++)
             if(libevdev_has_event_code(dev, EV_KEY, code)) pad.b[b++].BTN=code;
 
         // get axis event code and limits
-        for (int code=0,a=0; code<KEY_MAX && a<MAX_AXIS; code++) {
+        for (int code=0,a=0; code<ABS_MAX && a<MAX_AXIS; code++) {
             if(libevdev_has_event_code(dev, EV_ABS, code)) {
                 if(code==ABS_HAT0X) hatx_inx=a;  // save the hatx index for later
                 if(code==ABS_HAT0Y) haty_inx=a;  // save the haty index for later
@@ -1367,12 +1411,12 @@ private:
                 if(isBtn)  pad.b[num].eBTN  = eBTN[i];           // button event code to eGamepadBtn map
                 if(isAxis) pad.a[num].eAXIS = eAXIS[i];          // axis event code to eGamepadAxis map
                 if(isAxis) pad.a[num].flip  = flip;              // flip axis
-                if(isHat && i==8)  pad.a[hatx_inx].flip = flip;  // flip HAT0X
-                if(isHat && i==10) pad.a[haty_inx].flip = flip;  // flip HAT0Y
+                if(isHat && i==8  && hatx_inx>=0) pad.a[hatx_inx].flip = flip;  // flip HAT0X
+                if(isHat && i==10 && haty_inx>=0) pad.a[haty_inx].flip = flip;  // flip HAT0Y
                 //printf("i=%d num=%d isBtn=%d isHat=%d isAxis=%d filp=%d\n",i ,num, isBtn, isHat, isAxis, flip);
             }
         } else {  // Gamepad not listed.  Use heuristics to guess layout.
-            bool hasHAT=!!(hatx_inx & haty_inx);
+            bool hasHAT = (hatx_inx >= 0 && haty_inx >= 0);
             bool hasTrigger=false;
 
             auto& a = pad.a;
@@ -1455,13 +1499,12 @@ private:
         //printf("keycode=%d (0x%3x) %d\n", keycode, keycode, event.value);
         if(event.value>1) return;  // ignore repeats (0=up 1=down 2=repeat)
         for(auto& b : ev.b) if(keycode==b.BTN) {
-            if(b.eBTN>0) onButton(id, b.eBTN, event.value);
-            if(b.eBTN<0) onAxis  (id,-b.eBTN, event.value);
+            if(b.eBTN>0) onGpadButton(id, b.eBTN, event.value);
+            if(b.eBTN<0) onGpadAxis  (id,-b.eBTN, event.value);
         }
     }
 
     void GamepadAxisEvent(uint8_t id, input_event event) {
-        Gamepad& pad = win->gamepad[id];
         Evdev&   ev  = evdev[id];
 
         //------------------------------------------------------------------------------
@@ -1470,11 +1513,13 @@ private:
             return ev.a[0];
         };
 
-        auto Hat = [&](int val, int btnNeg, int btnPos) { // convert hat axis values to button events
-            if((val!=-1) && ( pad.buttons[btnNeg])) onButton(id, btnNeg, 0);
-            if((val!= 1) && ( pad.buttons[btnPos])) onButton(id, btnPos, 0);
-            if((val==-1) && (!pad.buttons[btnNeg])) onButton(id, btnNeg, 1);
-            if((val== 1) && (!pad.buttons[btnPos])) onButton(id, btnPos, 1);
+        auto Hat = [&](int val, int8_t& prev, int btnNeg, int btnPos) {
+            if (val == prev) return;
+            if (prev == -1) onGpadButton(id, btnNeg, 0);
+            if (prev ==  1) onGpadButton(id, btnPos, 0);
+            if (val  == -1) onGpadButton(id, btnNeg, 1);
+            if (val  ==  1) onGpadButton(id, btnPos, 1);
+            prev = static_cast<int8_t>(val);
         };
 
         auto isFuzz = [](int value, auto& a) -> bool { // detect fuzz events
@@ -1502,19 +1547,21 @@ private:
 
         auto& a = find_axis(event.code);
         int val = a.flip ? -event.value : event.value;
-        if(event.code == ABS_HAT0X) {Hat(val, eDPAD_LEFT, eDPAD_RIGHT); return;}
-        if(event.code == ABS_HAT0Y) {Hat(val, eDPAD_UP,   eDPAD_DOWN);  return;}
-        if(event.code > 10) return;         // Ignore HAT1+
+        if(event.code == ABS_HAT0X) { Hat(val, ev.hat_x, eDPAD_LEFT, eDPAD_RIGHT); return; }
+        if(event.code == ABS_HAT0Y) { Hat(val, ev.hat_y, eDPAD_UP,   eDPAD_DOWN);  return; }
+        if(event.code > 10) return;  // Ignore HAT1+
 
         if(isFuzz(event.value, a)) return;  // defuzz
         bool isTrigger = (a.eAXIS==eAXIS_TL || a.eAXIS==eAXIS_TR);
         float fval = isTrigger? Trigger(event.value, a)
                               : Thumb  (event.value, a);
 
-        if(pad.axes[a.eAXIS] == fval) return;  // deadzone
+        if (a.last == fval) return;   // unchanged after dead-zone / normalize
+        a.last = fval;                // value changed. store new value.
+
         if(a.eAXIS==eAXIS_LY || a.eAXIS==eAXIS_RY) fval=-fval; // flip y axis
         if(a.flip) fval=-fval;
-        onAxis(id, a.eAXIS, fval);
+        onGpadAxis(id, a.eAXIS, fval);
     }
 
     /*
@@ -1540,8 +1587,9 @@ private:
     }
     */
 };
-
-//#endif  // ENABLE_GAMEPAD
+#else   // ENABLE_GAMEPAD
+class GamepadLinux{};
+#endif  // ENABLE_GAMEPAD
 #endif  // GAMEPAD_LINUX_H
 
 // -------------------------------
@@ -2117,13 +2165,14 @@ void Window_win32::EnableDPIAware() {
 #define WINDOW_XCB
 
 //#define ENABLE_MULTITOUCH  // requires libxi-dev
-//#define ENABLE_GAMEPAD     // requires libevdev-dev (8kb)
+//#define ENABLE_GAMEPAD     // requires libevdev-dev (14kb)
 //#define ENABLE_CLIPBOARD   // requires libxcb-icccm4-dev + libxcb1-dev
 //#define ENABLE_SHOWIMAGE   // requires libxcb-image0-dev + libxcb1-dev
 //#define ENABLE_CURSOR      // requires libxcb-cursor-dev + libxcb1-dev + libxcb-cursor0
 //#define ENABLE_FULLSCREEN  // requires libxcb1-dev
 
 //-------------------------------------------------
+
 //#include <xcb/xcb.h>            // XCB only
 //#include <X11/Xlib.h>           // XLib only
 #include <X11/Xlib-xcb.h>         // Xlib + XCB
@@ -2135,8 +2184,6 @@ void Window_win32::EnableDPIAware() {
 #endif
 #ifdef ENABLE_CURSOR
 #include <xcb/xcb_cursor.h>       // mouse cursor icons
-#endif
-#ifdef ENABLE_GAMEPAD
 #endif
 #ifdef ENABLE_FULLSCREEN
 #include <xcb/xcb.h>
@@ -2179,7 +2226,7 @@ struct native_handle {
 };
 
 //=============================XCB==============================
-class Window_xcb : public WindowBase {
+class Window_xcb : public WindowBase, GamepadLinux {
     Display* display;                  // for XLib
     xcb_connection_t* xcb_connection;  // for XCB
     xcb_screen_t* xcb_screen;
@@ -2206,7 +2253,9 @@ class Window_xcb : public WindowBase {
     //------------------
     //---- Gamepad ----
 #ifdef ENABLE_GAMEPAD
-    GamepadLinux gpad{this};
+    void onGpadConnect(uint8_t pad, bool active)            override {eventFIFO.push(gpadConnect(pad, active));}
+    void onGpadButton (uint8_t pad, uint8_t btn, bool down) override {eventFIFO.push(gpadButton(pad,btn,down));}
+    void onGpadAxis   (uint8_t pad, uint8_t axis, float val)override {eventFIFO.push(gpadAxis(pad, axis, val));}
 #endif
     //------------------
 
@@ -2615,7 +2664,7 @@ EventType Window_xcb::TranslateEvent(xcb_generic_event_t* x_event) {
 
 EventType Window_xcb::getEvent(bool wait_for_event) {
 #ifdef ENABLE_GAMEPAD
-    gpad.ReadGamepadEvents();
+    ReadGamepadEvents();
 #endif
     if (!eventFIFO.isEmpty()) return eventFIFO.pop();  // pop message from message queue buffer
     xcb_generic_event_t* x_event;
@@ -2785,16 +2834,13 @@ bool Window_xcb::isFullscreen() {
 #define WINDOW_WAYLAND
 
 //#define ENABLE_MULTITOUCH
-//#define ENABLE_GAMEPAD       // requires libevdev-dev (8kb)
+//#define ENABLE_GAMEPAD       // requires libevdev-dev (14kb)
 //#define ENABLE_CLIPBOARD
 //#define ENABLE_SHOWIMAGE
 //#define ENABLE_CURSOR
 //#define ENABLE_FULLSCREEN
 //#define ENABLE_DPIAWARE
 
-
-#ifdef ENABLE_GAMEPAD
-#endif
 
 #include <wayland-client.h>       // libwayland-dev
 #include <wayland-egl.h>          // libwayland-dev
@@ -2815,7 +2861,7 @@ struct native_handle {
 };
 
 //==========================WAYLAND=============================
-class Window_wayland : public WindowBase {
+class Window_wayland : public WindowBase, GamepadLinux {
 public:
     wl_display*    display    = nullptr;
     wl_surface*    surface    = nullptr;
@@ -2863,7 +2909,9 @@ public:
 #endif
 
 #ifdef ENABLE_GAMEPAD
-    GamepadLinux gpad{this};
+    void onGpadConnect(uint8_t pad, bool active)            override {eventFIFO.push(gpadConnect(pad, active));}
+    void onGpadButton (uint8_t pad, uint8_t btn, bool down) override {eventFIFO.push(gpadButton(pad,btn,down));}
+    void onGpadAxis   (uint8_t pad, uint8_t axis, float val)override {eventFIFO.push(gpadAxis(pad, axis, val));}
 #endif
 
     float scale = 1.f;
@@ -2995,13 +3043,6 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         auto* w = static_cast<Window_wayland*>(data);
         //printf("configure\n");
 
-        // onFocus event
-        libdecor_window_state window_state = LIBDECOR_WINDOW_STATE_NONE;
-        libdecor_configuration_get_window_state(configuration, &window_state);  // may update window_state
-        w->fullscreen = (window_state & LIBDECOR_WINDOW_STATE_FULLSCREEN) != 0; // fullscreen flag
-        bool active   = (window_state & LIBDECOR_WINDOW_STATE_ACTIVE) != 0;
-        if (active != w->has_focus) w->eventFIFO.push(w->focusEvent(active));
-
         // onResize event
         float s    = w->getScale();
         int width  = w->shape.width /s;
@@ -3009,6 +3050,14 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         libdecor_configuration_get_content_size(configuration, frame, &width, &height);  // may or may not update width/height
         if(height<1) height=1;
         w->applySize(width*s, height*s, configuration);
+
+        // onFocus event
+        libdecor_window_state window_state = LIBDECOR_WINDOW_STATE_NONE;
+        libdecor_configuration_get_window_state(configuration, &window_state);  // may update window_state
+        w->fullscreen = (window_state & LIBDECOR_WINDOW_STATE_FULLSCREEN) != 0; // fullscreen flag
+        bool active   = (window_state & LIBDECOR_WINDOW_STATE_ACTIVE) != 0;
+        if (active != w->has_focus) w->eventFIFO.push(w->focusEvent(active));
+
         w->configured = true;
     }
 
@@ -3406,6 +3455,9 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
     shape.width  = width;
     shape.height = height;
     running      = true;
+    #ifndef ENABLE_DPIAWARE
+    setScale(1);
+    #endif
 
     printf("Creating Wayland-Window...\n");
 
@@ -3449,16 +3501,12 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
     libdecor_frame_set_app_id(decor_frame, title);
     libdecor_frame_map(decor_frame);  // triggers the first configure
     while(!configured) {libdecor_dispatch(decor_context, -1);} // Wait for configure
-    //eventFIFO.push(resizeEvent(shape.width, shape.height));
-
-#ifndef ENABLE_DPIAWARE
-    setScale(1);
-#endif
+    eventFIFO.push(resizeEvent(shape.width, shape.height));
 }
 
 EventType Window_wayland::getEvent(bool wait_for_event) {
 #ifdef ENABLE_GAMEPAD
-    gpad.ReadGamepadEvents();
+    ReadGamepadEvents();
 #endif
     if (!eventFIFO.isEmpty()) return eventFIFO.pop();
     libdecor_dispatch(decor_context, wait_for_event ? -1 : 0);

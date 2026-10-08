@@ -5,7 +5,7 @@
 #define WINDOW_WAYLAND
 
 //#define ENABLE_MULTITOUCH
-//#define ENABLE_GAMEPAD       // requires libevdev-dev (8kb)
+//#define ENABLE_GAMEPAD       // requires libevdev-dev (14kb)
 //#define ENABLE_CLIPBOARD
 //#define ENABLE_SHOWIMAGE
 //#define ENABLE_CURSOR
@@ -13,10 +13,7 @@
 //#define ENABLE_DPIAWARE
 
 #include "WindowBase.h"
-
-#ifdef ENABLE_GAMEPAD
 #include "gamepad_linux.h"
-#endif
 
 #include <wayland-client.h>       // libwayland-dev
 #include <wayland-egl.h>          // libwayland-dev
@@ -37,7 +34,7 @@ struct native_handle {
 };
 
 //==========================WAYLAND=============================
-class Window_wayland : public WindowBase {
+class Window_wayland : public WindowBase, GamepadLinux {
 public:
     wl_display*    display    = nullptr;
     wl_surface*    surface    = nullptr;
@@ -85,7 +82,9 @@ public:
 #endif
 
 #ifdef ENABLE_GAMEPAD
-    GamepadLinux gpad{this};
+    void onGpadConnect(uint8_t pad, bool active)            override {eventFIFO.push(gpadConnect(pad, active));}
+    void onGpadButton (uint8_t pad, uint8_t btn, bool down) override {eventFIFO.push(gpadButton(pad,btn,down));}
+    void onGpadAxis   (uint8_t pad, uint8_t axis, float val)override {eventFIFO.push(gpadAxis(pad, axis, val));}
 #endif
 
     float scale = 1.f;
@@ -217,13 +216,6 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         auto* w = static_cast<Window_wayland*>(data);
         //printf("configure\n");
 
-        // onFocus event
-        libdecor_window_state window_state = LIBDECOR_WINDOW_STATE_NONE;
-        libdecor_configuration_get_window_state(configuration, &window_state);  // may update window_state
-        w->fullscreen = (window_state & LIBDECOR_WINDOW_STATE_FULLSCREEN) != 0; // fullscreen flag
-        bool active   = (window_state & LIBDECOR_WINDOW_STATE_ACTIVE) != 0;
-        if (active != w->has_focus) w->eventFIFO.push(w->focusEvent(active));
-
         // onResize event
         float s    = w->getScale();
         int width  = w->shape.width /s;
@@ -231,6 +223,14 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         libdecor_configuration_get_content_size(configuration, frame, &width, &height);  // may or may not update width/height
         if(height<1) height=1;
         w->applySize(width*s, height*s, configuration);
+
+        // onFocus event
+        libdecor_window_state window_state = LIBDECOR_WINDOW_STATE_NONE;
+        libdecor_configuration_get_window_state(configuration, &window_state);  // may update window_state
+        w->fullscreen = (window_state & LIBDECOR_WINDOW_STATE_FULLSCREEN) != 0; // fullscreen flag
+        bool active   = (window_state & LIBDECOR_WINDOW_STATE_ACTIVE) != 0;
+        if (active != w->has_focus) w->eventFIFO.push(w->focusEvent(active));
+
         w->configured = true;
     }
 
@@ -628,6 +628,9 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
     shape.width  = width;
     shape.height = height;
     running      = true;
+    #ifndef ENABLE_DPIAWARE
+    setScale(1);
+    #endif
 
     printf("Creating Wayland-Window...\n");
 
@@ -671,16 +674,12 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
     libdecor_frame_set_app_id(decor_frame, title);
     libdecor_frame_map(decor_frame);  // triggers the first configure
     while(!configured) {libdecor_dispatch(decor_context, -1);} // Wait for configure
-    //eventFIFO.push(resizeEvent(shape.width, shape.height));
-
-#ifndef ENABLE_DPIAWARE
-    setScale(1);
-#endif
+    eventFIFO.push(resizeEvent(shape.width, shape.height));
 }
 
 EventType Window_wayland::getEvent(bool wait_for_event) {
 #ifdef ENABLE_GAMEPAD
-    gpad.ReadGamepadEvents();
+    ReadGamepadEvents();
 #endif
     if (!eventFIFO.isEmpty()) return eventFIFO.pop();
     libdecor_dispatch(decor_context, wait_for_event ? -1 : 0);

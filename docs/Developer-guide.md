@@ -8,10 +8,10 @@ For user-facing API usage, see `API-Reference.md`.
 
 ## Overview
 
-GWindow uses a class hierarchy:
+GWindow class hierarchy:
 
 - **`WindowBase` (`WindowBase.h`)**: Abstract base class with core logic.
-- **Platform Classes**: `Window_xcb`, `Window_win32`, `Window_android` implement platform-specific functionality.
+- **Platform Classes**: `Window_xcb`, `Window_wayland`, `Window_win32`, `Window_android`
 - **`GWindow` (`Window.h`)**: Alias for the platform-specific class.
 
 ---

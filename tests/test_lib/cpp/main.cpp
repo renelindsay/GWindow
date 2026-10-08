@@ -13,7 +13,7 @@ class MainWindow : public GWindow {  // Without Vulkan
     void onTouch      (eAction action, float x, float y, uint8_t id) { printf("Touch: %s %.2f x %.2f id:%d\n", type[action], x, y, id); }
     void onKey        (eAction action, eKeycode keycode)    { printf("Key: %s keycode:%d\n", type[action], keycode); }
     void onText       (const char *str)                     { printf("Text: '%s'\n", str); }
-    void onMove       (int16_t x, int16_t y)                { printf("Window Move: x=%d y=%d\n", x, y); }
+  //void onMove       (int16_t x, int16_t y)                { printf("Window Move: x=%d y=%d\n", x, y); }  // win32 and X11 only. Not supported on Android and Wayland
     void onFocus      (bool hasFocus)                       { printf("Window Focus: %s\n", hasFocus ? "True" : "False"); }
     void onResize     (uint16_t width, uint16_t height)     { printf("Window Resize: width=%4d height=%4d\n", width, height); }
     void onGpadConnect(uint8_t pad, bool active)            { printf("Gamepad %d %s\n", pad, active?"connected":"disconnected"); }
@@ -53,7 +53,6 @@ int main(int argc, char *argv[]) {
     window.setTitle("GWindow (lib)");                           // Set the window title
     //window.setSize(640, 480);                                   // Set the window size in pixels (Desktop)
     window.setSizeScaled(640, 480);                             // Set the window size (Desktop)
-    window.setPosition(0, 0);                                   // Set the window position to top-left
     window.showKeyboard(true);                                  // Show soft-keyboard (Android)
 
     //VkSurfaceKHR surface = window.CreateVkSurface(instance);  // Create the Vulkan surface (requires vkUtils)

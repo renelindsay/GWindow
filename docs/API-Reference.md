@@ -203,7 +203,7 @@ If window is closing (after clicking the close button or calling close()):
 * `void onMouse(eAction action, int16_t x, int16_t y, uint8_t btn)` — mouse event
 * `void onKey(eAction action, eKeycode keycode)` — keyboard key press/release
 * `void onText(const char* str)` — text input from keyboard (typed characters)
-* `void onMove(int16_t x, int16_t y)` — window move to new position/
+* `void onMove(int16_t x, int16_t y)` — window moved (Win32 & X11 only)
 * `void onResize(uint16_t width, uint16_t height)` — window resized
 * `void onFocus(bool hasFocus)` — window gained or lost focus.
 * `void onTouch(eAction action, float x, float y, uint8_t id)` — touchscreen event
