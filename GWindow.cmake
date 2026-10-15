@@ -6,39 +6,16 @@
 #   add_gwindow(myapp)
 #
 # Linux options:
-#   -DUSE_WAYLAND=ON
-#   -DUSE_WAYLAND=OFF (default: XCB)
+#   -DGWINDOW_USE_X11=ON  (default)
+#   -DGWINDOW_USE_X11=OFF
 
-option(USE_WAYLAND "Use Wayland instead of XCB on Linux" OFF)
+option(GWINDOW_USE_X11 "Use the X11/XCB backend instead of Wayland" OFF)
 
 function(add_gwindow target)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         find_package(PkgConfig REQUIRED)
 
-        if(USE_WAYLAND)
-            # Wayland dependencies
-            pkg_check_modules(WAYLAND REQUIRED wayland-client wayland-cursor wayland-egl)
-            pkg_check_modules(LIBDECOR REQUIRED libdecor-0)
-            pkg_check_modules(XKBCOMMON REQUIRED xkbcommon)
-            #target_include_directories(${target} PUBLIC ${WAYLAND_INCLUDE_DIRS})
-            #target_link_libraries(${target} PUBLIC ${WAYLAND_LIBRARIES})
-            #target_compile_definitions(${target} PUBLIC USE_WAYLAND)
-
-            target_include_directories(${target} PUBLIC
-                ${WAYLAND_INCLUDE_DIRS}
-                ${LIBDECOR_INCLUDE_DIRS}
-                ${XKBCOMMON_INCLUDE_DIRS}
-            )
-
-            target_link_libraries(${target} PUBLIC
-                ${WAYLAND_LIBRARIES}
-                ${LIBDECOR_LIBRARIES}
-                ${XKBCOMMON_LIBRARIES}
-            )
-
-            target_compile_definitions(${target} PUBLIC VK_USE_PLATFORM_WAYLAND_KHR)
-
-        else()  # X11/XCB
+        if(GWINDOW_USE_X11)  # X11/XCB backend
             # X11 and related dependencies
             find_package(X11 REQUIRED)
             target_include_directories(${target} PUBLIC ${X11_INCLUDE_DIR})
@@ -52,6 +29,21 @@ function(add_gwindow target)
                 ${X11_xcb_cursor_LIB}
             )
             target_compile_definitions(${target} PUBLIC VK_USE_PLATFORM_XCB_KHR)
+        else()  # Wayland
+            pkg_check_modules(WAYLAND REQUIRED wayland-client wayland-cursor wayland-egl)
+            pkg_check_modules(LIBDECOR REQUIRED libdecor-0)
+            pkg_check_modules(XKBCOMMON REQUIRED xkbcommon)
+            target_include_directories(${target} PUBLIC
+                ${WAYLAND_INCLUDE_DIRS}
+                ${LIBDECOR_INCLUDE_DIRS}
+                ${XKBCOMMON_INCLUDE_DIRS}
+            )
+            target_link_libraries(${target} PUBLIC
+                ${WAYLAND_LIBRARIES}
+                ${LIBDECOR_LIBRARIES}
+                ${XKBCOMMON_LIBRARIES}
+            )
+            target_compile_definitions(${target} PUBLIC VK_USE_PLATFORM_WAYLAND_KHR)
         endif()
 
         # libevdev for gamepad support

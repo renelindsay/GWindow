@@ -15,41 +15,10 @@ aux_source_directory(. SRC_LIST)
 #==============================LINUX==============================
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")    
     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")  #for find_package
-    option(USE_WAYLAND "Use Wayland" OFF)
-    if(USE_WAYLAND)
-        #add_definitions(-DVK_USE_PLATFORM_WAYLAND_KHR)
 
-        find_package(PkgConfig REQUIRED)
-        pkg_check_modules(WAYLAND REQUIRED wayland-client wayland-cursor wayland-egl)
-        pkg_check_modules(LIBDECOR REQUIRED libdecor-0)
-        pkg_check_modules(XKBCOMMON REQUIRED xkbcommon)
+    option(GWINDOW_USE_X11 "Use the X11/XCB backend instead of Wayland" OFF)
 
-        aux_source_directory(. SRC_LIST)
-        add_library(${PROJECT_NAME} STATIC ${SRC_LIST})
-
-        target_include_directories(${PROJECT_NAME} PUBLIC
-            ${WAYLAND_INCLUDE_DIRS}
-            ${LIBDECOR_INCLUDE_DIRS}
-            ${XKBCOMMON_INCLUDE_DIRS}
-        )
-
-        target_link_libraries(${PROJECT_NAME} PUBLIC
-            ${WAYLAND_LIBRARIES}
-            ${LIBDECOR_LIBRARIES}
-            ${XKBCOMMON_LIBRARIES}
-        )
-        #message(STATUS "WAYLAND_LIBRARIES = ${WAYLAND_LIBRARIES}")
-        #message(STATUS "WAYLAND_INCLUDE_DIRS = ${WAYLAND_INCLUDE_DIRS}")
-        #target_link_libraries(${PROJECT_NAME} PUBLIC wayland-client wayland-cursor)
-
-        target_compile_definitions(${PROJECT_NAME} PUBLIC VK_USE_PLATFORM_WAYLAND_KHR)
-
-    else()  # X11/XCB
-        #add_definitions(-DVK_USE_PLATFORM_XCB_KHR)
-        #add_definitions(-DENABLE_MULTITOUCH)
-        #add_definitions(-DENABLE_SHOWIMAGE)
-        #add_definitions(-DENABLE_CURSOR)
-
+    if(GWINDOW_USE_X11)  # X11 backend
         find_package(X11 REQUIRED)
         include_directories(${X11_INCLUDE_DIR})
         link_libraries(${X11_LIBRARIES})
@@ -59,9 +28,27 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         link_libraries(${X11_Xinput_LIB})     # MultiTouch    (libXi.so)
         link_libraries(${X11_xcb_image_LIB})  # ShowImage     (libxcb-image.so)
         link_libraries(${X11_xcb_cursor_LIB}) # Mouse cursors (libxcb-cursor.so)
-
         add_library(${PROJECT_NAME} STATIC ${SRC_LIST})
         target_compile_definitions(${PROJECT_NAME} PUBLIC VK_USE_PLATFORM_XCB_KHR)
+    else()  # Wayland backend
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(WAYLAND REQUIRED wayland-client wayland-cursor wayland-egl)
+        pkg_check_modules(LIBDECOR REQUIRED libdecor-0)
+        pkg_check_modules(XKBCOMMON REQUIRED xkbcommon)
+
+        aux_source_directory(. SRC_LIST)
+        add_library(${PROJECT_NAME} STATIC ${SRC_LIST})
+        target_include_directories(${PROJECT_NAME} PUBLIC
+            ${WAYLAND_INCLUDE_DIRS}
+            ${LIBDECOR_INCLUDE_DIRS}
+            ${XKBCOMMON_INCLUDE_DIRS}
+        )
+        target_link_libraries(${PROJECT_NAME} PUBLIC
+            ${WAYLAND_LIBRARIES}
+            ${LIBDECOR_LIBRARIES}
+            ${XKBCOMMON_LIBRARIES}
+        )
+        target_compile_definitions(${PROJECT_NAME} PUBLIC VK_USE_PLATFORM_WAYLAND_KHR)
     endif()
 
     # Add LIBEVDEV for Gamepad support (requires package: libevdev-dev)
