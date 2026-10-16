@@ -24,6 +24,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <cstdlib>
 #include <cassert>
 
@@ -682,7 +683,16 @@ EventType Window_wayland::getEvent(bool wait_for_event) {
     ReadGamepadEvents();
 #endif
     if (!eventFIFO.isEmpty()) return eventFIFO.pop();
-    libdecor_dispatch(decor_context, wait_for_event ? -1 : 0);
+    if (wait_for_event) {
+        const int fd = libdecor_get_fd(decor_context);
+        struct pollfd pfd = { fd, POLLIN, 0 };  // watch this fd
+        while (eventFIFO.isEmpty()) {
+            if (poll(&pfd, 1, -1) < 0) break;   // wait for events (-1: no timeout) or exit on error (EINTR)
+            if (libdecor_dispatch(decor_context, 0) < 0) break;
+        }
+    } else {
+        libdecor_dispatch(decor_context, 0);
+    }
     return eventFIFO.pop();
 }
 

@@ -362,6 +362,7 @@ bool Window_xcb::InitTouch() {
 //---------------------------------------------------------------------------
 
 EventType Window_xcb::TranslateEvent(xcb_generic_event_t* x_event) {
+    if(!x_event) return {EventType::NONE};
     static char buf[4] = {};                                            // store char for text event
     xcb_button_press_event_t& e = *(xcb_button_press_event_t*)x_event;  // xcb_motion_notify_event_t
     int16_t mx = e.event_x;
@@ -501,28 +502,25 @@ EventType Window_xcb::TranslateEvent(xcb_generic_event_t* x_event) {
         }break;
 #endif
         default:
-            // printf("EVENT: %d\n",(x_event->response_type & ~0x80));  //get event numerical value
+             printf("EVENT: %d\n",(x_event->response_type & ~0x80));  //get event numerical value
             break;
     }  // switch
-    return {EventType::NONE};
+    return {EventType::UNKNOWN};
 }
 
 EventType Window_xcb::getEvent(bool wait_for_event) {
 #ifdef ENABLE_GAMEPAD
     ReadGamepadEvents();
 #endif
-    if (!eventFIFO.isEmpty()) return eventFIFO.pop();  // pop message from message queue buffer
-    xcb_generic_event_t* x_event;
-    if (wait_for_event) x_event = xcb_wait_for_event(xcb_connection);  // Blocking mode
-    else                x_event = xcb_poll_for_event(xcb_connection);  // Non-blocking mode
-    while(x_event) {
+    if (!eventFIFO.isEmpty()) return eventFIFO.pop();
+    for (;;) {
+        xcb_generic_event_t* x_event;
+        if (wait_for_event) x_event = xcb_wait_for_event(xcb_connection);  // Blocking mode
+        else                x_event = xcb_poll_for_event(xcb_connection);  // Non-blocking mode
         EventType event = TranslateEvent(x_event);
-        XFree(x_event);
-        if (event.tag == EventType::UNKNOWN) {
-            x_event = xcb_poll_for_event(xcb_connection);  // Discard unknown events (Intel Mesa drivers spams event 35)
-        } else return event;
+        free(x_event);
+        if (event.tag != EventType::UNKNOWN) return event;
     }
-    return {EventType::NONE};
 }
 
 float Window_xcb::getDisplayScale() {
@@ -551,19 +549,24 @@ void Window_xcb::showImage(uint32_t* buf, uint32_t width, uint32_t height) {  //
     xcb_image_format_t format = XCB_IMAGE_FORMAT_Z_PIXMAP;
     int depth  = xcb_screen->root_depth;
 
-    xcb_create_pixmap(c,depth,pixmap,xcb_window,width,height);
-    xcb_create_gc(c,gc,pixmap,0,NULL);
+    xcb_create_pixmap(c, depth, pixmap, xcb_window, width, height);
 
-    xcb_image_t* image = xcb_image_create_native(c,width,height,format,depth,0,0,(uint8_t*)buf);
+    // Prevent spamming event 14: XCB_NO_EXPOSURE when calling CopyArea
+    uint32_t gc_mask = XCB_GC_GRAPHICS_EXPOSURES;
+    uint32_t gc_val  = 0;
+    xcb_create_gc(c, gc, pixmap, gc_mask, &gc_val);
+
+    xcb_image_t* image = xcb_image_create_native(c, width, height, format, depth, 0, 0, (uint8_t*)buf);
     xcb_image_put(c, pixmap, gc, image, 0, 0, 0);
     xcb_image_destroy(image);
-    xcb_copy_area(c,pixmap,xcb_window,gc,0,0,0,0,width,height);
+    xcb_copy_area(c, pixmap, xcb_window, gc, 0, 0, 0, 0, width, height);
     xcb_flush(xcb_connection);
 
     xcb_free_gc(c, gc);
     xcb_free_pixmap(c, pixmap);
 }
 #endif
+
 
 void Window_xcb::setCursor(eCursor id) {
 #ifdef ENABLE_CURSOR
