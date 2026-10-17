@@ -60,7 +60,8 @@ int main(int argc, char *argv[]) {
     float s = window.getScale();
     printf("scale=%f\n",s);
 
-    while(window.pollEvents()) {                                // Main event loop, runs until window is closed.
+  //while(window.waitEvents()) {                                // Main event loop, runs until window is closed.(Blocking)
+    while(window.pollEvents()) {                                // Main event loop, runs until window is closed.(Non-blocking)
         bool key_pressed = window.getKeyState(eKEY_LeftShift);
         if (key_pressed) printf("LEFT SHIFT PRESSED\r");
 

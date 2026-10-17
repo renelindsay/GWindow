@@ -1,8 +1,8 @@
 @echo off
 echo Download and unpack ANGLE(EGL+GLES) for Windows:
 
-set "URL=https://github.com/mmozeiko/build-angle/releases/download/2026-05-09/angle-x64-2026-05-09.zip"
-set "ZIP=angle-x64-2026-05-09.zip"
+set "URL=https://github.com/mmozeiko/build-angle/releases/download/2026-10-18/angle-x64-2026-10-18.zip"
+set "ZIP=angle-x64-2026-10-18.zip"
 
 REM --- Download ZIP ---
 echo Downloading...
