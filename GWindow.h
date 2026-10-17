@@ -1167,6 +1167,12 @@ static const std::array<uint8_t, 20>* get_gamepad_layout(uint16_t VID, uint16_t 
 // 3: Periodically call the ReadGamepadEvents() function, to trigger events.
 //
 
+#if defined(__linux__) && !defined(__ANDROID__)  // Linux, but not Android
+#define LINUX
+#endif
+
+#ifdef LINUX
+
 #ifndef GAMEPAD_LINUX_H
 #define GAMEPAD_LINUX_H
 
@@ -1591,6 +1597,7 @@ private:
 class GamepadLinux{};
 #endif  // ENABLE_GAMEPAD
 #endif  // GAMEPAD_LINUX_H
+#endif  // LINUX
 
 // -------------------------------
 // window_win32.h
