@@ -502,7 +502,7 @@ EventType Window_xcb::TranslateEvent(xcb_generic_event_t* x_event) {
         }break;
 #endif
         default:
-             printf("EVENT: %d\n",(x_event->response_type & ~0x80));  //get event numerical value
+            // printf("EVENT: %d\n",(x_event->response_type & ~0x80));  //get event numerical value
             break;
     }  // switch
     return {EventType::UNKNOWN};

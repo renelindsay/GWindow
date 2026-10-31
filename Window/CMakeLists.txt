@@ -61,7 +61,6 @@ endif()
 #=================================================================
 #=============================WINDOWS=============================
 if(WIN32)
-    #add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
     remove_definitions(-Dfar)
     remove_definitions(-Dnear)
@@ -75,7 +74,6 @@ endif()
 if(ANDROID)
     message("Platform = ${ANDROID_PLATFORM}")
     set(CMAKE_ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES ON)  # 16kb page size
-    #add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
 
     # Set path to source files.
     aux_source_directory(${ANDROID_NDK}/sources/android/native_app_glue SRC_LIST)

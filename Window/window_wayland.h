@@ -219,8 +219,8 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 
         // onResize event
         float s    = w->getScale();
-        int width  = w->shape.width /s;
-        int height = w->shape.height/s;
+        int width  = w->width() /s;
+        int height = w->height()/s;
         libdecor_configuration_get_content_size(configuration, frame, &width, &height);  // may or may not update width/height
         if(height<1) height=1;
         w->applySize(width*s, height*s, configuration);
@@ -469,7 +469,7 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         auto* w = static_cast<Window_wayland*>(data);
         if (fd < 0) return;
         if (mime && (strstr(mime, "text/") || !strcmp(mime, "UTF8_STRING") || !strcmp(mime, "STRING"))) {
-            const char* s = w->clipboard.c_str();
+            const char* s = w->getClipboardText();
             for (size_t left = w->clipboard.size(); left; ) {
                 ssize_t n = write(fd, s, left);
                 if (n <= 0) break;
