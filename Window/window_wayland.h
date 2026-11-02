@@ -36,6 +36,94 @@ struct native_handle {
 
 //==========================WAYLAND=============================
 class Window_wayland : public WindowBase, GamepadLinux {
+    // --- libdecor frame callbacks ---
+    static void decor_frame_configure(libdecor_frame*, libdecor_configuration*, void*);
+    static void decor_frame_close(libdecor_frame*, void*);
+    static void decor_frame_commit(libdecor_frame*, void* data);
+    static void decor_frame_dismiss_popup(libdecor_frame*, const char*, void*){}
+    static constexpr libdecor_frame_interface decor_frame_iface = {
+        decor_frame_configure, decor_frame_close,
+        decor_frame_commit, decor_frame_dismiss_popup,
+    };
+
+    // --- wl_keyboard listener ---
+    static void keyboard_keymap(void* data, wl_keyboard*, uint32_t format, int32_t fd, uint32_t size);
+    static void keyboard_enter(void* data, wl_keyboard*, uint32_t serial, wl_surface*, wl_array*);
+    static void keyboard_leave(void* data, wl_keyboard*, uint32_t, wl_surface*);
+    static void keyboard_key(void* data, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state);
+    static void keyboard_modifiers(void* data, wl_keyboard*, uint32_t, uint32_t depressed, uint32_t latched, uint32_t locked, uint32_t group);
+    static void keyboard_repeat_info(void*, wl_keyboard*, int32_t, int32_t){}
+    static constexpr wl_keyboard_listener keyboard_listener = {
+        keyboard_keymap, keyboard_enter, keyboard_leave, keyboard_key,
+        keyboard_modifiers, keyboard_repeat_info
+    };
+
+    // --- wl_pointer listener ---
+    static void pointer_enter(void* data, wl_pointer*, uint32_t serial, wl_surface* entered_surface, wl_fixed_t sx, wl_fixed_t sy);
+    static void pointer_leave(void*, wl_pointer*, uint32_t, wl_surface*){}
+    static void pointer_motion(void* data, wl_pointer*, uint32_t, wl_fixed_t x, wl_fixed_t y);
+    static void pointer_button(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button, uint32_t state);
+    static void pointer_axis(void* data, wl_pointer*, uint32_t, uint32_t axis, wl_fixed_t value);
+    static void pointer_frame(void*, wl_pointer*) {}
+    static void pointer_axis_source(void*, wl_pointer*, uint32_t) {}
+    static void pointer_axis_stop(void*, wl_pointer*, uint32_t, uint32_t) {}
+    static void pointer_axis_discrete(void*, wl_pointer*, uint32_t, int32_t) {}
+    static constexpr wl_pointer_listener pointer_listener = {
+        pointer_enter, pointer_leave, pointer_motion, pointer_button, pointer_axis,
+        pointer_frame, pointer_axis_source, pointer_axis_stop, pointer_axis_discrete
+    };
+
+    // --- wl_touch listener ---
+    static void touch_down(void* data, wl_touch*, uint32_t, uint32_t, wl_surface* surface, int32_t id, wl_fixed_t x, wl_fixed_t y);
+    static void touch_up(void* data, wl_touch*, uint32_t, uint32_t, int32_t id);
+    static void touch_motion(void* data, wl_touch*, uint32_t, int32_t id, wl_fixed_t x, wl_fixed_t y);
+    static void touch_frame(void*, wl_touch*) {}
+    static void touch_cancel(void* data, wl_touch*);
+    static void touch_shape(void*, wl_touch*, int32_t, wl_fixed_t, wl_fixed_t) {}
+    static void touch_orientation(void*, wl_touch*, int32_t, wl_fixed_t) {}
+    static constexpr wl_touch_listener touch_listener = {
+        touch_down, touch_up, touch_motion, touch_frame,
+        touch_cancel, touch_shape, touch_orientation
+    };
+
+    // --- Seat listener ---
+    static void seat_capabilities(void* data, wl_seat* seat, uint32_t caps);
+    static void seat_name(void*, wl_seat*, const char*) {}
+    static constexpr wl_seat_listener seat_listener = { seat_capabilities, seat_name };
+
+    // --- Registry listener ---
+    static void on_global(void* data, wl_registry* reg, uint32_t name, const char* iface, uint32_t version);
+    static void on_global_remove(void*, wl_registry*, uint32_t) {}
+    static constexpr wl_registry_listener registry_listener = { on_global, on_global_remove };
+
+#ifdef ENABLE_CLIPBOARD
+    // --- Clipboard listener ---
+    static void data_offer(void*, wl_data_offer*, const char*);
+    static void data_offer_noop_u32(void*, wl_data_offer*, uint32_t) {}
+
+    static void data_source_send(void*, wl_data_source*, const char*, int32_t);
+    static void data_source_cancelled(void*, wl_data_source*);
+    static void data_source_noop_str(void*, wl_data_source*, const char*) {};
+    static void data_source_noop(void*, wl_data_source*) {};
+    static void data_source_noop_u32(void*, wl_data_source*, uint32_t) {};
+
+    static void data_device_data_offer(void*, wl_data_device*, wl_data_offer*);
+    static void data_device_selection(void*, wl_data_device*, wl_data_offer*);
+    static void data_device_noop_enter(void*, wl_data_device*, uint32_t, wl_surface*, wl_fixed_t, wl_fixed_t, wl_data_offer*) {};
+    static void data_device_noop(void*, wl_data_device*) {};
+    static void data_device_noop_motion(void*, wl_data_device*, uint32_t, wl_fixed_t, wl_fixed_t) {};
+
+    static constexpr wl_data_offer_listener  data_offer_listener  = { data_offer, data_offer_noop_u32, data_offer_noop_u32 };
+    static constexpr wl_data_source_listener data_source_listener = {
+        data_source_noop_str, data_source_send, data_source_cancelled,
+        data_source_noop, data_source_noop, data_source_noop_u32
+    };
+    static constexpr wl_data_device_listener data_device_listener = {
+        data_device_data_offer, data_device_noop_enter, data_device_noop,
+        data_device_noop_motion, data_device_noop, data_device_selection
+    };
+#endif
+
 public:
     wl_display*    display    = nullptr;
     wl_surface*    surface    = nullptr;
@@ -147,14 +235,8 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 // clang-format on
 
 //======================WAYLAND CALLBACKS=======================
-    // --- Seat ---
-    static void seat_capabilities(void* data, wl_seat* seat, uint32_t caps);
-    static void seat_name(void*, wl_seat*, const char*) {}
-    static constexpr wl_seat_listener seat_listener = { seat_capabilities, seat_name };
-    // ------------
-
     // --- Registry listener --- (libdecor binds xdg_wm_base itself; we bind compositor + shm + seat)
-    static void on_global(void* data, wl_registry* reg, uint32_t name, const char* iface, uint32_t version) {
+    void Window_wayland::on_global(void* data, wl_registry* reg, uint32_t name, const char* iface, uint32_t version) {
         auto* w = static_cast<Window_wayland*>(data);
         //printf("iface: %s\n", iface);
         auto is=[iface](const wl_interface& i)->bool{ return (strcmp(iface, i.name) == 0);};
@@ -167,9 +249,6 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         if(is(wl_data_device_manager_interface)){ w->data_device_manager=(wl_data_device_manager*)bind(wl_data_device_manager_interface, 3);}
 #endif
     }
-
-    static void on_global_remove(void*, wl_registry*, uint32_t) {}
-    static constexpr wl_registry_listener registry_listener = { on_global, on_global_remove };
     // -------------------------
 
     // --- wl_surface ---
@@ -213,7 +292,7 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
     // -------------------------
 
     // --- libdecor frame callbacks ---
-    static void decor_frame_configure(libdecor_frame* frame, libdecor_configuration* configuration, void* data) {
+    void Window_wayland::decor_frame_configure(libdecor_frame* frame, libdecor_configuration* configuration, void* data) {
         auto* w = static_cast<Window_wayland*>(data);
         //printf("configure\n");
 
@@ -235,29 +314,20 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         w->configured = true;
     }
 
-    static void decor_frame_close(libdecor_frame*, void* data) {
+    void Window_wayland::decor_frame_close(libdecor_frame*, void* data) {
         auto* w = static_cast<Window_wayland*>(data);
         w->eventFIFO.push(w->closeEvent());
     }
 
     // Called by libdecor, to flush decoration-only changes.
-    static void decor_frame_commit(libdecor_frame*, void* data) {
+    void Window_wayland::decor_frame_commit(libdecor_frame*, void* data) {
         auto* w = static_cast<Window_wayland*>(data);
         wl_surface_commit(w->surface);
     }
-
-    static void decor_frame_dismiss_popup(libdecor_frame*, const char*, void*) {}
-
-    static constexpr libdecor_frame_interface decor_frame_iface = {
-        decor_frame_configure,
-        decor_frame_close,
-        decor_frame_commit,
-        decor_frame_dismiss_popup,
-    };
     // -------------------------
 
     // --- wl_keyboard listener ---
-    static void keyboard_keymap(void* data, wl_keyboard*, uint32_t format, int32_t fd, uint32_t size) {
+    void Window_wayland::keyboard_keymap(void* data, wl_keyboard*, uint32_t format, int32_t fd, uint32_t size) {
         auto* w = static_cast<Window_wayland*>(data);
         if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1) { ::close(fd); return; }
 
@@ -274,7 +344,7 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         if (w->xkb_keymap_ptr) w->xkb_state_ptr = xkb_state_new(w->xkb_keymap_ptr);
     }
 
-    static void keyboard_enter(void* data, wl_keyboard*, uint32_t serial, wl_surface*, wl_array*) {
+    void Window_wayland::keyboard_enter(void* data, wl_keyboard*, uint32_t serial, wl_surface*, wl_array*) {
         auto* w = static_cast<Window_wayland*>(data);
 #ifdef ENABLE_CLIPBOARD
         w->keyboard_enter_serial = serial;
@@ -282,12 +352,12 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         if (!w->has_focus) w->eventFIFO.push(w->focusEvent(true));
     }
 
-    static void keyboard_leave(void* data, wl_keyboard*, uint32_t, wl_surface*) {
+    void Window_wayland::keyboard_leave(void* data, wl_keyboard*, uint32_t, wl_surface*) {
         auto* w = static_cast<Window_wayland*>(data);
         if (w->has_focus) w->eventFIFO.push(w->focusEvent(false));
     }
 
-    static void keyboard_key(void* data, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state) {
+    void Window_wayland::keyboard_key(void* data, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state) {
         auto* w = static_cast<Window_wayland*>(data);
         uint32_t xkb_code = key + 8;  // wl keycode is raw evdev; xkbcommon/X11 convention adds 8
         uint8_t hidcode = (xkb_code < 256) ? WAYLAND_EVDEV_TO_HID[xkb_code] : 0;
@@ -301,19 +371,12 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         }
     }
 
-    static void keyboard_modifiers(void* data, wl_keyboard*, uint32_t, uint32_t depressed,
+    void Window_wayland::keyboard_modifiers(void* data, wl_keyboard*, uint32_t, uint32_t depressed,
                                     uint32_t latched, uint32_t locked, uint32_t group) {
         auto* w = static_cast<Window_wayland*>(data);
         if (w->xkb_state_ptr)
             xkb_state_update_mask(w->xkb_state_ptr, depressed, latched, locked, 0, 0, group);
     }
-
-    static void keyboard_repeat_info(void*, wl_keyboard*, int32_t, int32_t) {}
-
-    static constexpr wl_keyboard_listener keyboard_listener = {
-        keyboard_keymap, keyboard_enter, keyboard_leave, keyboard_key,
-        keyboard_modifiers, keyboard_repeat_info
-    };
 
     // --- wl_pointer listener ---
     // Wayland button codes are raw Linux input-event-codes (BTN_LEFT=0x110, BTN_RIGHT=0x111, BTN_MIDDLE=0x112).
@@ -321,7 +384,7 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
     #define GW_BTN_RIGHT  0x111
     #define GW_BTN_MIDDLE 0x112
 
-    static void pointer_enter(void* data, wl_pointer*, uint32_t serial, wl_surface* entered_surface, wl_fixed_t sx, wl_fixed_t sy) {
+    void Window_wayland::pointer_enter(void* data, wl_pointer*, uint32_t serial, wl_surface* entered_surface, wl_fixed_t sx, wl_fixed_t sy) {
         auto* w = static_cast<Window_wayland*>(data);
         w->eventFIFO.push(w->mouseEvent(eMOVE, (int16_t)wl_fixed_to_int(sx), (int16_t)wl_fixed_to_int(sy), 0));
 #ifdef ENABLE_CURSOR
@@ -332,16 +395,14 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 #endif
     }
 
-    static void pointer_leave(void*, wl_pointer*, uint32_t, wl_surface*) {}
-
-    static void pointer_motion(void* data, wl_pointer*, uint32_t, wl_fixed_t x, wl_fixed_t y) {
+    void Window_wayland::pointer_motion(void* data, wl_pointer*, uint32_t, wl_fixed_t x, wl_fixed_t y) {
         auto* w = static_cast<Window_wayland*>(data);
         float s=w->getScale();
         uint8_t bestBtn = w->getBtnState(1) ? 1 : w->getBtnState(2) ? 2 : w->getBtnState(3) ? 3 : 0;
         w->eventFIFO.push(w->mouseEvent(eMOVE, (int16_t)wl_fixed_to_int(x*s), (int16_t)wl_fixed_to_int(y*s), bestBtn));
     }
 
-    static void pointer_button(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button, uint32_t state) {
+    void Window_wayland::pointer_button(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button, uint32_t state) {
         auto* w = static_cast<Window_wayland*>(data);
         uint8_t btn = (button == GW_BTN_LEFT) ? 1 : (button == GW_BTN_RIGHT) ? 2 : (button == GW_BTN_MIDDLE) ? 3 : 0;
         if (!btn) return;
@@ -349,29 +410,19 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         w->eventFIFO.push(w->mouseEvent(down ? eDOWN : eUP, w->mouse.pos.x, w->mouse.pos.y, btn));
     }
 
-    static void pointer_axis(void* data, wl_pointer*, uint32_t, uint32_t axis, wl_fixed_t value) {
+    void Window_wayland::pointer_axis(void* data, wl_pointer*, uint32_t, uint32_t axis, wl_fixed_t value) {
         auto* w = static_cast<Window_wayland*>(data);
         if (axis != WL_POINTER_AXIS_VERTICAL_SCROLL) return;
         uint8_t wheel = (wl_fixed_to_double(value) < 0) ? 4 : 5;
         w->eventFIFO.push(w->mouseEvent(eDOWN, w->mouse.pos.x, w->mouse.pos.y, wheel));
     }
 
-    static void pointer_frame(void*, wl_pointer*) {}
-    static void pointer_axis_source(void*, wl_pointer*, uint32_t) {}
-    static void pointer_axis_stop(void*, wl_pointer*, uint32_t, uint32_t) {}
-    static void pointer_axis_discrete(void*, wl_pointer*, uint32_t, int32_t) {}
-
-    static constexpr wl_pointer_listener pointer_listener = {
-        pointer_enter, pointer_leave, pointer_motion, pointer_button, pointer_axis,
-        pointer_frame, pointer_axis_source, pointer_axis_stop, pointer_axis_discrete
-    };
-
 #ifdef ENABLE_MULTITOUCH
     // --- wl_touch listener ---
     // Wayland touch coordinates are surface-local logical coordinates.
     // Convert them to the same physical-pixel coordinates used for mouse.
 
-    static void touch_down(void* data, wl_touch*, uint32_t, uint32_t,
+    void Window_wayland::touch_down(void* data, wl_touch*, uint32_t, uint32_t,
                            wl_surface* surface, int32_t id,
                            wl_fixed_t x, wl_fixed_t y) {
         auto* w = static_cast<Window_wayland*>(data);
@@ -383,14 +434,14 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         w->eventFIFO.push(e);
     }
 
-    static void touch_up(void* data, wl_touch*, uint32_t, uint32_t, int32_t id) {
+    void Window_wayland::touch_up(void* data, wl_touch*, uint32_t, uint32_t, int32_t id) {
         auto* w = static_cast<Window_wayland*>(data);
         auto ptr = w->MTouch.getPointer(id);
         EventType e = w->MTouch.Event(eUP, ptr.x, ptr.y, id);
         w->eventFIFO.push(e);
     }
 
-    static void touch_motion(void* data, wl_touch*, uint32_t, int32_t id,
+    void Window_wayland::touch_motion(void* data, wl_touch*, uint32_t, int32_t id,
                              wl_fixed_t x, wl_fixed_t y) {
         auto* w = static_cast<Window_wayland*>(data);
         float s = w->getScale();
@@ -400,22 +451,14 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         w->eventFIFO.push(e);
     }
 
-    static void touch_frame(void*, wl_touch*) {}
-    static void touch_cancel(void* data, wl_touch*) {
+    void Window_wayland::touch_cancel(void* data, wl_touch*) {
         auto* w = static_cast<Window_wayland*>(data);
         w->MTouch.Clear();
     }
-    static void touch_shape(void*, wl_touch*, int32_t, wl_fixed_t, wl_fixed_t) {}
-    static void touch_orientation(void*, wl_touch*, int32_t, wl_fixed_t) {}
-
-    static constexpr wl_touch_listener touch_listener = {
-        touch_down, touch_up, touch_motion, touch_frame, touch_cancel,
-        touch_shape, touch_orientation
-    };
 #endif
 
     // --- wl_seat capabilities: attach/detach keyboard + pointer + touch as they come and go ---
-    static void seat_capabilities(void* data, wl_seat* seat, uint32_t caps) {
+    void Window_wayland::seat_capabilities(void* data, wl_seat* seat, uint32_t caps) {
         auto* w = static_cast<Window_wayland*>(data);
         bool has_kbd = caps & WL_SEAT_CAPABILITY_KEYBOARD;
         bool has_ptr = caps & WL_SEAT_CAPABILITY_POINTER;
@@ -453,7 +496,7 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 
 #ifdef ENABLE_CLIPBOARD
     // --- Clipboard: wl_data_offer / source / device (text only) ---
-    static void data_offer(void* data, wl_data_offer*, const char* mime) {
+    void Window_wayland::data_offer(void* data, wl_data_offer*, const char* mime) {
         auto* w = static_cast<Window_wayland*>(data);
         if (!strcmp(mime, "text/plain;charset=utf-8") || !strcmp(mime, "UTF8_STRING"))
             w->clipboard_mime = mime;
@@ -461,11 +504,8 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
                  (!strcmp(mime, "text/plain") || !strcmp(mime, "STRING")))
             w->clipboard_mime = mime;
     }
-    static void data_offer_noop_u32(void*, wl_data_offer*, uint32_t) {}
-    static constexpr wl_data_offer_listener data_offer_listener =
-        { data_offer, data_offer_noop_u32, data_offer_noop_u32 };
 
-    static void data_source_send(void* data, wl_data_source*, const char* mime, int32_t fd) {
+    void Window_wayland::data_source_send(void* data, wl_data_source*, const char* mime, int32_t fd) {
         auto* w = static_cast<Window_wayland*>(data);
         if (fd < 0) return;
         if (mime && (strstr(mime, "text/") || !strcmp(mime, "UTF8_STRING") || !strcmp(mime, "STRING"))) {
@@ -478,19 +518,12 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         }
         ::close(fd);
     }
-    static void data_source_cancelled(void* data, wl_data_source* src) {
+    void Window_wayland::data_source_cancelled(void* data, wl_data_source* src) {
         auto* w = static_cast<Window_wayland*>(data);
         if (w->data_source == src) { wl_data_source_destroy(src); w->data_source = nullptr; }
     }
-    static void data_source_noop_str(void*, wl_data_source*, const char*) {}
-    static void data_source_noop(void*, wl_data_source*) {}
-    static void data_source_noop_u32(void*, wl_data_source*, uint32_t) {}
-    static constexpr wl_data_source_listener data_source_listener = {
-        data_source_noop_str, data_source_send, data_source_cancelled,
-        data_source_noop, data_source_noop, data_source_noop_u32
-    };
 
-    static void data_device_data_offer(void* data, wl_data_device*, wl_data_offer* offer) {
+    void Window_wayland::data_device_data_offer(void* data, wl_data_device*, wl_data_offer* offer) {
         auto* w = static_cast<Window_wayland*>(data);
         // Drop any previous offer that never became the selection (e.g. DnD).
         if (w->pending_offer && w->pending_offer != w->selection_offer)
@@ -499,7 +532,7 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         w->clipboard_mime.clear();
         wl_data_offer_add_listener(offer, &data_offer_listener, w);
     }
-    static void data_device_selection(void* data, wl_data_device*, wl_data_offer* offer) {
+    void Window_wayland::data_device_selection(void* data, wl_data_device*, wl_data_offer* offer) {
         auto* w = static_cast<Window_wayland*>(data);
         if (w->selection_offer && w->selection_offer != offer)
             wl_data_offer_destroy(w->selection_offer);
@@ -508,13 +541,6 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
         if (offer != w->pending_offer) w->clipboard_mime.clear();
         w->pending_offer = nullptr;
     }
-    static void data_device_noop_enter(void*, wl_data_device*, uint32_t, wl_surface*, wl_fixed_t, wl_fixed_t, wl_data_offer*) {}
-    static void data_device_noop(void*, wl_data_device*) {}
-    static void data_device_noop_motion(void*, wl_data_device*, uint32_t, wl_fixed_t, wl_fixed_t) {}
-    static constexpr wl_data_device_listener data_device_listener = {
-        data_device_data_offer, data_device_noop_enter, data_device_noop,
-        data_device_noop_motion, data_device_noop, data_device_selection
-    };
 #endif  // ENABLE_CLIPBOARD
 
 //==============================================================

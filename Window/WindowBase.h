@@ -105,7 +105,6 @@ struct Mouse {
 //======================Window base class=======================
 class WindowBase {
   protected:
-  public:
     Mouse mouse;                                                               // mouse state
     bool keystate[256] = {};                                                   // keyboard state
     Gamepad gamepad[MAX_GAMEPADS];                                             // gamepad state
