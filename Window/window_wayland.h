@@ -60,7 +60,7 @@ class Window_wayland : public WindowBase, GamepadLinux {
 
     // --- wl_pointer listener ---
     static void pointer_enter(void* data, wl_pointer*, uint32_t serial, wl_surface* entered_surface, wl_fixed_t sx, wl_fixed_t sy);
-    static void pointer_leave(void*, wl_pointer*, uint32_t, wl_surface*){}
+    static void pointer_leave(void* data, wl_pointer*, uint32_t, wl_surface* surface);
     static void pointer_motion(void* data, wl_pointer*, uint32_t, wl_fixed_t x, wl_fixed_t y);
     static void pointer_button(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button, uint32_t state);
     static void pointer_axis(void* data, wl_pointer*, uint32_t, uint32_t axis, wl_fixed_t value);
@@ -142,6 +142,7 @@ public:
     wl_seat*     seat     = nullptr;
     wl_keyboard* keyboard = nullptr;
     wl_pointer*  pointer  = nullptr;
+    wl_surface*  pointer_focus = nullptr;  // surface that currently has pointer focus
 
 #ifdef ENABLE_MULTITOUCH
     wl_touch*    touch    = nullptr;
@@ -349,12 +350,12 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 #ifdef ENABLE_CLIPBOARD
         w->keyboard_enter_serial = serial;
 #endif
-        if (!w->has_focus) w->eventFIFO.push(w->focusEvent(true));
+        //if (!w->has_focus) w->eventFIFO.push(w->focusEvent(true));
     }
 
     void Window_wayland::keyboard_leave(void* data, wl_keyboard*, uint32_t, wl_surface*) {
         auto* w = static_cast<Window_wayland*>(data);
-        if (w->has_focus) w->eventFIFO.push(w->focusEvent(false));
+        //if (w->has_focus) w->eventFIFO.push(w->focusEvent(false));
     }
 
     void Window_wayland::keyboard_key(void* data, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state) {
@@ -386,7 +387,7 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 
     void Window_wayland::pointer_enter(void* data, wl_pointer*, uint32_t serial, wl_surface* entered_surface, wl_fixed_t sx, wl_fixed_t sy) {
         auto* w = static_cast<Window_wayland*>(data);
-        w->eventFIFO.push(w->mouseEvent(eMOVE, (int16_t)wl_fixed_to_int(sx), (int16_t)wl_fixed_to_int(sy), 0));
+        w->pointer_focus = entered_surface;
 #ifdef ENABLE_CURSOR
         if (entered_surface == w->surface) {
             w->pointer_enter_serial = serial;
@@ -395,15 +396,22 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 #endif
     }
 
+    void Window_wayland::pointer_leave(void* data, wl_pointer*, uint32_t, wl_surface* surface) {
+        auto* w = static_cast<Window_wayland*>(data);
+        if (w->pointer_focus == surface) w->pointer_focus = nullptr;
+    }
+
     void Window_wayland::pointer_motion(void* data, wl_pointer*, uint32_t, wl_fixed_t x, wl_fixed_t y) {
         auto* w = static_cast<Window_wayland*>(data);
-        float s=w->getScale();
+        if (w->pointer_focus != w->surface) return;  // ignore decoration motion
+        float s = w->getScale();
         uint8_t bestBtn = w->getBtnState(1) ? 1 : w->getBtnState(2) ? 2 : w->getBtnState(3) ? 3 : 0;
         w->eventFIFO.push(w->mouseEvent(eMOVE, (int16_t)wl_fixed_to_int(x*s), (int16_t)wl_fixed_to_int(y*s), bestBtn));
     }
 
     void Window_wayland::pointer_button(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button, uint32_t state) {
         auto* w = static_cast<Window_wayland*>(data);
+        if (w->pointer_focus != w->surface) return;  // ignore title-bar clicks
         uint8_t btn = (button == GW_BTN_LEFT) ? 1 : (button == GW_BTN_RIGHT) ? 2 : (button == GW_BTN_MIDDLE) ? 3 : 0;
         if (!btn) return;
         bool down = (state == WL_POINTER_BUTTON_STATE_PRESSED);
@@ -412,6 +420,7 @@ static const unsigned char WAYLAND_EVDEV_TO_HID[256] = {
 
     void Window_wayland::pointer_axis(void* data, wl_pointer*, uint32_t, uint32_t axis, wl_fixed_t value) {
         auto* w = static_cast<Window_wayland*>(data);
+        if (w->pointer_focus != w->surface) return;  // ignore wheel on decorations
         if (axis != WL_POINTER_AXIS_VERTICAL_SCROLL) return;
         uint8_t wheel = (wl_fixed_to_double(value) < 0) ? 4 : 5;
         w->eventFIFO.push(w->mouseEvent(eDOWN, w->mouse.pos.x, w->mouse.pos.y, wheel));
