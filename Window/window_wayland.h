@@ -158,6 +158,7 @@ public:
     wl_surface*      cursor_surface      = nullptr;
     wl_cursor*       cursors[11]         = {};  // indexed by eCursor
     uint32_t         pointer_enter_serial = 0;  // serial from the most recent wl_pointer::enter
+    int              cursor_scale = 0;
     void LoadCursorTheme();
 #endif
 
@@ -631,30 +632,46 @@ void Window_wayland::showImage(uint32_t* buf, uint32_t width, uint32_t height) {
 
 #ifdef ENABLE_CURSOR
 void Window_wayland::LoadCursorTheme() {
-    cursor_theme = wl_cursor_theme_load(nullptr, 24, shm);
+    int s = getScale();
+    if (cursor_theme) wl_cursor_theme_destroy(cursor_theme);
+    cursor_theme = wl_cursor_theme_load("Yaru", 24*s, shm);
     if (!cursor_theme) { printf("WARNING: wl_cursor_theme_load failed -- no cursor icons\n"); return; }
-    cursors[eCursor::eArrow]      = wl_cursor_theme_get_cursor(cursor_theme, "left_ptr");
-    cursors[eCursor::eCaret]      = wl_cursor_theme_get_cursor(cursor_theme, "xterm");
-    cursors[eCursor::eResizeAll]  = wl_cursor_theme_get_cursor(cursor_theme, "fleur");
-    cursors[eCursor::eResizeNS]   = wl_cursor_theme_get_cursor(cursor_theme, "sb_v_double_arrow");
-    cursors[eCursor::eResizeEW]   = wl_cursor_theme_get_cursor(cursor_theme, "sb_h_double_arrow");
-    cursors[eCursor::eResizeNESW] = wl_cursor_theme_get_cursor(cursor_theme, "top_right_corner");
-    cursors[eCursor::eResizeNWSE] = wl_cursor_theme_get_cursor(cursor_theme, "top_left_corner");
-    cursors[eCursor::eHand]       = wl_cursor_theme_get_cursor(cursor_theme, "hand2");
-    cursors[eCursor::eWait]       = wl_cursor_theme_get_cursor(cursor_theme, "wait");
-    cursors[eCursor::eProgress]   = wl_cursor_theme_get_cursor(cursor_theme, "progress");
-    cursors[eCursor::eNotAllowed] = wl_cursor_theme_get_cursor(cursor_theme, "circle");
-    cursor_surface = wl_compositor_create_surface(compositor);
+    cursor_scale = s;
+
+    auto load=[this](std::initializer_list<const char*> names) {
+        for (auto name : names) if(wl_cursor* c = wl_cursor_theme_get_cursor(cursor_theme, name)) return c;
+        return wl_cursor_theme_get_cursor(cursor_theme, "default");
+    };
+
+    cursors[eCursor::eArrow]      = load({"default", "left_ptr"});
+    cursors[eCursor::eCaret]      = load({"text", "xterm", "ibeam"});
+    cursors[eCursor::eResizeAll]  = load({"all-scroll", "fleur", "size_all"});
+    cursors[eCursor::eResizeNS]   = load({"ns-resize", "size_ver", "sb_v_double_arrow"});
+    cursors[eCursor::eResizeEW]   = load({"ew-resize", "size_hor", "sb_h_double_arrow"});
+    cursors[eCursor::eResizeNESW] = load({"nesw-resize", "size_bdiag", "top_right_corner"});
+    cursors[eCursor::eResizeNWSE] = load({"nwse-resize", "size_fdiag", "top_left_corner"});
+    cursors[eCursor::eHand]       = load({"pointer", "hand2", "hand1"});
+    cursors[eCursor::eWait]       = load({"wait", "watch"});
+    cursors[eCursor::eProgress]   = load({"progress", "left_ptr_watch"});
+    cursors[eCursor::eNotAllowed] = load({"not-allowed", "crossed_circle", "forbidden", "circle"});
+
+    if (!cursor_surface) cursor_surface = wl_compositor_create_surface(compositor);
 }
 
 void Window_wayland::setCursor(eCursor id) {
-    wl_cursor* cursor = cursors[id];
-    wl_cursor_image* image  = cursor->images[0];
-    uint             count  = cursor->image_count;  assert(count>0);
-    wl_buffer*       buffer = wl_cursor_image_get_buffer(image);
-    wl_pointer_set_cursor(pointer, pointer_enter_serial, cursor_surface, image->hotspot_x, image->hotspot_y);
+    int s = getScale();
+    if (s != cursor_scale) LoadCursorTheme();
+    if (!cursor_surface) return;
+    wl_cursor* cursor = cursors[id];          if(!cursor) return;
+    uint       count  = cursor->image_count;  if(!count)  return;
+    static uint ctr=0;  // animation counter
+    ctr = ctr % count;  // loop animation
+    wl_cursor_image* image = cursor->images[ctr++];
+    wl_buffer*      buffer = wl_cursor_image_get_buffer(image);
+    wl_surface_set_buffer_scale(cursor_surface, s);
+    wl_pointer_set_cursor(pointer, pointer_enter_serial, cursor_surface, image->hotspot_x/s, image->hotspot_y/s);
     wl_surface_attach(cursor_surface, buffer, 0, 0);
-    wl_surface_damage(cursor_surface, 0, 0, image->width, image->height);
+    wl_surface_damage_buffer(cursor_surface, 0, 0, image->width, image->height);
     wl_surface_commit(cursor_surface);
 }
 #endif  // ENABLE_CURSOR
@@ -664,9 +681,9 @@ void Window_wayland::Create(const char* title, uint width, uint height) {
     shape.width  = width;
     shape.height = height;
     running      = true;
-    #ifndef ENABLE_DPIAWARE
+#ifndef ENABLE_DPIAWARE
     setScale(1);
-    #endif
+#endif
 
     printf("Creating Wayland-Window...\n");
 
