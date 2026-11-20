@@ -6,8 +6,8 @@
 #   add_gwindow(myapp)
 #
 # Linux options:
-#   -DGWINDOW_USE_X11=ON  (default)
-#   -DGWINDOW_USE_X11=OFF
+#   -DGWINDOW_USE_X11=ON
+#   -DGWINDOW_USE_X11=OFF (default)
 
 option(GWINDOW_USE_X11 "Use the X11/XCB backend instead of Wayland" OFF)
 
@@ -30,31 +30,19 @@ function(add_gwindow target)
             )
             target_compile_definitions(${target} PUBLIC VK_USE_PLATFORM_XCB_KHR)
         else()  # Wayland
-            pkg_check_modules(WAYLAND REQUIRED wayland-client wayland-cursor wayland-egl)
-            pkg_check_modules(LIBDECOR REQUIRED libdecor-0)
-            pkg_check_modules(XKBCOMMON REQUIRED xkbcommon)
-            target_include_directories(${target} PUBLIC
-                ${WAYLAND_INCLUDE_DIRS}
-                ${LIBDECOR_INCLUDE_DIRS}
-                ${XKBCOMMON_INCLUDE_DIRS}
-            )
-            target_link_libraries(${target} PUBLIC
-                ${WAYLAND_LIBRARIES}
-                ${LIBDECOR_LIBRARIES}
-                ${XKBCOMMON_LIBRARIES}
-            )
+            pkg_check_modules(WAYLAND REQUIRED IMPORTED_TARGET wayland-client wayland-cursor wayland-egl libdecor-0 xkbcommon)
+            target_link_libraries(${target} PUBLIC PkgConfig::WAYLAND)
             target_compile_definitions(${target} PUBLIC VK_USE_PLATFORM_WAYLAND_KHR)
         endif()
 
         # libevdev for gamepad support
-        pkg_check_modules(LIBEVDEV REQUIRED libevdev)
-        target_include_directories(${target} PUBLIC ${LIBEVDEV_INCLUDE_DIRS})
-        target_link_libraries(${target} PUBLIC ${LIBEVDEV_LIBRARIES})
+        pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
+        target_link_libraries(${target} PUBLIC PkgConfig::LIBEVDEV)
 
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
         # Windows-specific libs  (eg. user32 gdi32 winmm)
         target_link_libraries(${target} PUBLIC xinput9_1_0) # for Gamepad
-        target_compile_definitions(${PROJECT_NAME} PUBLIC VK_USE_PLATFORM_WIN32_KHR)
+        target_compile_definitions(${target} PUBLIC VK_USE_PLATFORM_WIN32_KHR)
 
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Android")
         # android_native_app_glue
@@ -63,7 +51,7 @@ function(add_gwindow target)
     
         # Android-specific dependencies
         target_link_libraries(${target} PUBLIC android log app_glue)
-        target_compile_definitions(${PROJECT_NAME} PUBLIC VK_USE_PLATFORM_ANDROID_KHR)
+        target_compile_definitions(${target} PUBLIC VK_USE_PLATFORM_ANDROID_KHR)
     endif()
 endfunction()
 
