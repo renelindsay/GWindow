@@ -35,8 +35,13 @@ endif()
 #=================================================================
 #==============================ALL================================
 # Link GWindow's dependencies
-include("../../GWindow.cmake")
+include("../../GWindowConfig.cmake")
 add_gwindow(${PROJECT_NAME})
+
+# Alternative method:
+#set(GWindow_DIR "../..")
+#find_package(GWindow CONFIG REQUIRED)
+#target_link_libraries(${PROJECT_NAME} PRIVATE GWindow)
 
 # Place exe by assets:
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR})
